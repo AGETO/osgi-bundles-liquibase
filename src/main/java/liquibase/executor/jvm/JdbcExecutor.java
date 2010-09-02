@@ -59,7 +59,7 @@ public class JdbcExecutor extends AbstractExecutor implements Executor {
             // in the case when the exception translator hasn't been initialized yet.
             JdbcUtils.closeStatement(stmt);
             stmt = null;
-            throw new DatabaseException("Error executing SQL " + StringUtils.join(applyVisitors(action.getStatement(), sqlVisitors), "; on "+ con.getURL()), ex);
+            throw new DatabaseException("Error executing SQL " + StringUtils.join(applyVisitors(action.getStatement(), sqlVisitors), "; ")+ "; on "+ con.getURL() + "; reason: " + ex.getMessage(), ex);
         }
         finally {
             JdbcUtils.closeStatement(stmt);
@@ -210,7 +210,7 @@ public class JdbcExecutor extends AbstractExecutor implements Executor {
                 if (sqlToExecute.length != 1) {
                     throw new DatabaseException("Cannot call update on Statement that returns back multiple Sql objects");
                 }
-                log.debug("Executing UPDATE database command: "+sqlToExecute[0]);                
+                log.debug("Executing UPDATE database command: "+sqlToExecute[0]);
                 return stmt.executeUpdate(sqlToExecute[0]);
             }
 
