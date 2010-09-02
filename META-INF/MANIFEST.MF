@@ -54,7 +54,8 @@ Export-Package: liquibase,
  liquibase.util.csv.opencsv.bean,
  liquibase.util.file,
  liquibase.util.ui,
- liquibase.util.xml
+ liquibase.util.xml,
+ org.eclipseguru.liquibase.internal;x-internal:=true
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
 Import-Package: javax.servlet;version="2.5.0";resolution:=optional,
  javax.servlet.http;version="2.5.0";resolution:=optional,
@@ -78,3 +79,5 @@ Liquibase-Package: liquibase.change,
  liquibase.snapshot,
  liquibase.logging,
  liquibase.ext
+Require-Bundle: org.eclipse.equinox.common;bundle-version="3.6.0"
+Bundle-ActivationPolicy: lazy

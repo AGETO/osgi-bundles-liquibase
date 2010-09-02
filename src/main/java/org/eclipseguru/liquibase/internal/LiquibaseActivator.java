@@ -1,5 +1,7 @@
 package org.eclipseguru.liquibase.internal;
 
+import liquibase.servicelocator.ServiceLocator;
+
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 
@@ -11,19 +13,19 @@ public class LiquibaseActivator implements BundleActivator {
 		return context;
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * @see org.osgi.framework.BundleActivator#start(org.osgi.framework.BundleContext)
-	 */
+	@Override
 	public void start(BundleContext bundleContext) throws Exception {
 		LiquibaseActivator.context = bundleContext;
+
+		// set Equinox service locator
+		ServiceLocator.setInstance(new EquinoxServiceLocator());
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * @see org.osgi.framework.BundleActivator#stop(org.osgi.framework.BundleContext)
-	 */
+	@Override
 	public void stop(BundleContext bundleContext) throws Exception {
+		// unset Equinox service locator
+		ServiceLocator.setInstance(null);
+
 		LiquibaseActivator.context = null;
 	}
 
