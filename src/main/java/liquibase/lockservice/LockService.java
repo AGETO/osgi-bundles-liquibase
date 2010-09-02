@@ -18,6 +18,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class LockService {
 
@@ -28,7 +29,7 @@ public class LockService {
     private long changeLogLockWaitTime = 1000 * 60 * 5;  //default to 5 mins
     private long changeLogLocRecheckTime = 1000 * 10;  //default to every 10 seconds
 
-    private static Map<Database, LockService> instances = new ConcurrentHashMap<Database, LockService>();
+    private static ConcurrentMap<Database, LockService> instances = new ConcurrentHashMap<Database, LockService>();
 
     private LockService(Database database) {
         this.database = database;
@@ -36,9 +37,13 @@ public class LockService {
 
     public static LockService getInstance(Database database) {
         if (!instances.containsKey(database)) {
-            instances.put(database, new LockService(database));
+            instances.putIfAbsent(database, new LockService(database));
         }
         return instances.get(database);
+    }
+
+    public static LockService removeInstance(Database database) {
+        return instances.remove(database);
     }
 
     public void setChangeLogLockWaitTime(long changeLogLockWaitTime) {
