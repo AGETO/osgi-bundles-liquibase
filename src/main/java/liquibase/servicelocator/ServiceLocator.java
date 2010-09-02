@@ -19,15 +19,6 @@ public class ServiceLocator {
 
     private static ServiceLocator instance;
 
-    static {
-        try {
-            Class<?> scanner = Class.forName("Liquibase.ServiceLocator.ClrServiceLocator, Liquibase");
-            instance = (ServiceLocator) scanner.newInstance();
-        } catch (Exception e) {
-            instance = new ServiceLocator();
-        }
-    }
-
     private ResourceAccessor resourceAccessor;
 
     private Map<Class, List<Class>> classesBySuperclass;
@@ -35,28 +26,45 @@ public class ServiceLocator {
     private Logger logger = new DefaultLogger(); //cannot look up regular logger because you get a stackoverflow since we are in the servicelocator
     private PackageScanClassResolver classResolver;
 
-    private ServiceLocator() {
-        setResourceAccessor(new ClassLoaderResourceAccessor());
+    protected ServiceLocator() {
+        this(new ClassLoaderResourceAccessor());
     }
 
-    private ServiceLocator(ResourceAccessor accessor) {
+    protected ServiceLocator(ResourceAccessor accessor) {
         setResourceAccessor(accessor);
     }
 
     public static ServiceLocator getInstance() {
+    	if(null == instance)
+    		setInstance(new ServiceLocator());
         return instance;
     }
 
-    public void setResourceAccessor(ResourceAccessor resourceAccessor) {
-        this.resourceAccessor = resourceAccessor;
-        this.classesBySuperclass = new HashMap<Class, List<Class>>();
+	public static synchronized void setInstance(ServiceLocator serviceLocator) {
+		instance = serviceLocator;
+		if(null != instance)
+			instance.initialize();
+	}
 
+	public void setResourceAccessor(ResourceAccessor resourceAccessor) {
+        this.resourceAccessor = resourceAccessor;
+    }
+
+	protected PackageScanClassResolver createClassResolver() {
         if (WebSpherePackageScanClassResolver.isWebSphereClassLoader(this.getClass().getClassLoader())) {
             logger.debug("Using WebSphere Specific Class Resolver");
-            this.classResolver = new WebSpherePackageScanClassResolver("liquibase/parser/core/xml/dbchangelog-2.0.xsd");
+            return new WebSpherePackageScanClassResolver("liquibase/parser/core/xml/dbchangelog-2.0.xsd");
         } else {
-            this.classResolver = new DefaultPackageScanClassResolver();
+            logger.debug("Using Default Class Resolver");
+        	return new DefaultPackageScanClassResolver();
         }
+	}
+	private void initialize() {
+		if(null == resourceAccessor)
+			throw new IllegalStateException("no resource accessor set");
+
+        this.classesBySuperclass = new HashMap<Class, List<Class>>();
+        this.classResolver = createClassResolver();
         this.classResolver.setClassLoaders(new HashSet<ClassLoader>(Arrays.asList(new ClassLoader[] {resourceAccessor.toClassLoader()})));
 
         packagesToScan = new ArrayList<String>();
@@ -86,7 +94,7 @@ public class ServiceLocator {
 	            throw new UnexpectedLiquibaseException(e);
 	        }
         }
-    }
+	}
 
     public void addPackageToScan(String packageName) {
         packagesToScan.add(packageName);
@@ -172,10 +180,6 @@ public class ServiceLocator {
         }
 
         return classes;
-    }
-
-    public static void reset() {
-        instance = new ServiceLocator();
     }
 
     protected Logger getLogger() {
