@@ -138,7 +138,16 @@ public class DefaultPackageScanClassResolver implements PackageScanClassResolver
                 url = customResourceLocator(url);
 
                 String urlPath = url.getFile();
+				String host = null;
                 urlPath = URLDecoder.decode(urlPath, "UTF-8");
+
+                if (url.getProtocol().equals("vfs") && !urlPath.startsWith("vfs")) {
+                    urlPath = "vfs:"+urlPath;
+                }
+                if (url.getProtocol().equals("vfszip") && !urlPath.startsWith("vfszip")) {
+                    urlPath = "vfszip:"+urlPath;
+                }
+
                 log.debug("Decoded urlPath: " + urlPath + " with protocol: " + url.getProtocol());
 
                 // If it's a file in a directory, trim the stupid file: spec
@@ -147,7 +156,9 @@ public class DefaultPackageScanClassResolver implements PackageScanClassResolver
                     // for example + being decoded to something else (+ can be used in temp folders on Mac OS)
                     // to remedy this then create new path without using the URLDecoder
                     try {
-                        urlPath = new URI(url.getFile()).getPath();
+                        URI uri = new URI(url.getFile());
+						host = uri.getHost();
+						urlPath = uri.getPath();
                     } catch (URISyntaxException e) {
                         // fallback to use as it was given from the URLDecoder
                         // this allows us to work on Windows if users have spaces in paths
@@ -165,9 +176,24 @@ public class DefaultPackageScanClassResolver implements PackageScanClassResolver
                 }
 
                 // Else it's in a JAR, grab the path to the jar
+                if (urlPath.contains(".jar/") && !urlPath.contains(".jar!/")) {
+                    urlPath = urlPath.replace(".jar/", ".jar!/");
+                }
+
                 if (urlPath.indexOf('!') > 0) {
                     urlPath = urlPath.substring(0, urlPath.indexOf('!'));
                 }
+				
+				// If a host component was given prepend it to the decoded path.
+				// This still has its problems as we silently skip user and password
+				// information etc. but it fixes UNC urls on windows.
+				if (host != null) {
+					if (urlPath.startsWith("/")) {
+						urlPath = "//" + host + urlPath;
+					} else {
+						urlPath = "//" + host + "/" + urlPath;
+					}
+				}
 
                 log.debug("Scanning for classes in [" + urlPath + "] matching criteria: " + test);
 
@@ -178,11 +204,11 @@ public class DefaultPackageScanClassResolver implements PackageScanClassResolver
                 } else {
                     InputStream stream;
                     if (urlPath.startsWith("http:") || urlPath.startsWith("https:")
-                            || urlPath.startsWith("sonicfs:")) {
+                            || urlPath.startsWith("sonicfs:") || urlPath.startsWith("vfs:") || urlPath.startsWith("vfszip:")) {
                         // load resources using http/https
                         // sonic ESB requires to be loaded using a regular URLConnection
-                        log.debug("Loading from jar using http/https: " + urlPath);
                         URL urlStream = new URL(urlPath);
+                        log.debug("Loading from jar using "+urlStream.getProtocol()+": " + urlPath);
                         URLConnection con = urlStream.openConnection();
                         // disable cache mainly to avoid jar file locking on Windows
                         con.setUseCaches(false);
@@ -292,7 +318,11 @@ public class DefaultPackageScanClassResolver implements PackageScanClassResolver
             if (!classesByJarUrl.containsKey(urlPath)) {
                 Set<String> names = new HashSet<String>();
 
-                jarStream = new JarInputStream(stream);
+                if (stream instanceof JarInputStream) {
+                    jarStream = (JarInputStream) stream;
+                } else {
+                    jarStream = new JarInputStream(stream);
+                }
 
                 JarEntry entry;
                 while ((entry = jarStream.getNextJarEntry()) != null) {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010 Gunnar Wagenknecht and others.
+ * Copyright (c) 2010, 2013 Gunnar Wagenknecht and others.
  * All rights reserved.
  *
  * This program and the accompanying materials are made available under the terms of the
@@ -9,9 +9,8 @@
  * Contributors:
  *     Gunnar Wagenknecht - initial API and implementation
  */
-package org.eclipseguru.liquibase.internal;
+package net.ageto.liquibase.internal;
 
-import liquibase.servicelocator.PackageScanClassResolver;
 import liquibase.servicelocator.ServiceLocator;
 
 /**
@@ -19,8 +18,11 @@ import liquibase.servicelocator.ServiceLocator;
  */
 public class EquinoxServiceLocator extends ServiceLocator {
 
-	@Override
-	protected PackageScanClassResolver createClassResolver() {
-		return new EquinoxPackageScanClassResolver();
+	/**
+	 * Creates a new instance.
+	 */
+	public EquinoxServiceLocator() {
+		super(new EquinoxPackageScanClassResolver());
 	}
+
 }

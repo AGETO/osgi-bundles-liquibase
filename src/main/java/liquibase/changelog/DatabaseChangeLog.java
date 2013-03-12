@@ -24,6 +24,9 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
     private List<ChangeSet> changeSets = new ArrayList<ChangeSet>();
     private ChangeLogParameters changeLogParameters;
 
+    public DatabaseChangeLog() {
+    }
+
     public DatabaseChangeLog(String physicalFilePath) {
         this.physicalFilePath = physicalFilePath;
     }
@@ -87,7 +90,10 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
         for (ChangeSet changeSet : changeSets) {
             if (changeSet.getFilePath().equalsIgnoreCase(path)
                     && changeSet.getAuthor().equalsIgnoreCase(author)
-                    && changeSet.getId().equalsIgnoreCase(id)) {
+                    && changeSet.getId().equalsIgnoreCase(id)
+                    && (null == changeSet.getDbmsSet()
+                    || changeSet.getDbmsSet().isEmpty()
+                    || changeSet.getDbmsSet().contains(changeLogParameters.getValue("database.typeName").toString()))) {
                 return changeSet;
             }
         }
@@ -119,9 +125,6 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
         return getFilePath().hashCode();
     }
 
-    /**
-     * Checks changelogs for bad MD5Sums and preconditions before attempting a migration
-     */
     public void validate(Database database, String... contexts) throws LiquibaseException {
 
         ChangeLogIterator logIterator = new ChangeLogIterator(this, new DbmsChangeSetFilter(database), new ContextChangeSetFilter(contexts));

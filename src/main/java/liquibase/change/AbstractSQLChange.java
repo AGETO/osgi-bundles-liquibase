@@ -1,6 +1,7 @@
 package liquibase.change;
 
 import liquibase.database.Database;
+import liquibase.database.core.MSSQLDatabase;
 import liquibase.statement.SqlStatement;
 import liquibase.statement.core.RawSqlStatement;
 import liquibase.util.StringUtils;
@@ -105,7 +106,11 @@ public abstract class AbstractSQLChange extends AbstractChange {
         }
 
         String processedSQL = getSql().replaceAll("\r\n", "\n").replaceAll("\r", "\n");
-        for (String statement : StringUtils.processMutliLineSQL(processedSQL, isStrippingComments(), getEndDelimiter())) {
+        for (String statement : StringUtils.processMutliLineSQL(processedSQL, isStrippingComments(), isSplittingStatements(), getEndDelimiter())) {
+            if (database instanceof MSSQLDatabase) {
+                 statement = statement.replaceAll("\n", "\r\n");
+             }
+
             returnStatements.add(new RawSqlStatement(statement, getEndDelimiter()));
         }
 

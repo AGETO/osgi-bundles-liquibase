@@ -8,6 +8,7 @@ import liquibase.executor.ExecutorService;
 import liquibase.logging.LogFactory;
 import liquibase.statement.core.GetViewDefinitionStatement;
 
+import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -116,10 +117,22 @@ public class SybaseDatabase extends AbstractDatabase {
     }
 
     @Override
-    public String getAutoIncrementClause() {
+    protected String getAutoIncrementClause() {
         return "IDENTITY";
     }
 
+	@Override
+	protected boolean generateAutoIncrementStartWith(BigInteger startWith) {
+		// not supported
+		return false;
+	}
+	
+	@Override
+	protected boolean generateAutoIncrementBy(BigInteger incrementBy) {
+		// not supported
+		return false;
+	}    
+    
     @Override
     protected String getDefaultDatabaseSchemaName() throws DatabaseException {
         return null;
@@ -188,12 +201,12 @@ public class SybaseDatabase extends AbstractDatabase {
 
     @Override
     public boolean isSystemTable(String catalogName, String schemaName, String tableName) {
-        return super.isSystemTable(catalogName, schemaName, tableName) || schemaName.equals("sys");
+        return super.isSystemTable(catalogName, schemaName, tableName) || schemaName.equals("sys") || tableName.toLowerCase().startsWith("sybfi");
     }
 
     @Override
     public boolean isSystemView(String catalogName, String schemaName, String viewName) {
-        return super.isSystemView(catalogName, schemaName, viewName) || schemaName.equals("sys");
+        return super.isSystemView(catalogName, schemaName, viewName) || schemaName.equals("sys") || viewName.toLowerCase().equals("sybfi");
     }
 
     public String generateDefaultConstraintName(String tableName, String columnName) {

@@ -46,21 +46,35 @@ public class MySQLDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGenerato
         Map<String, List<String>> tableSchema = new HashMap<String, List<String>>();
         
         if (!schemaCache.containsKey(tableName)) {
-        	
-        	Statement selectStatement = ((JdbcConnection) database.getConnection()).getUnderlyingConnection().createStatement();
-            ResultSet rsColumnType = selectStatement.executeQuery("DESC "+database.escapeTableName(schemaName, tableName));
-            
-            while(rsColumnType.next()) {
-            	List<String> colSchema = new ArrayList<String>();
-            	colSchema.add(rsColumnType.getString("Type"));
-            	colSchema.add(rsColumnType.getString("Default"));
-            	tableSchema.put(rsColumnType.getString("Field"), colSchema);
+
+            Statement selectStatement = null;
+            ResultSet rsColumnType = null;
+            try {
+                selectStatement = ((JdbcConnection) database.getConnection()).getUnderlyingConnection().createStatement();
+                rsColumnType = selectStatement.executeQuery("DESC "+database.escapeTableName(schemaName, tableName));
+
+                while(rsColumnType.next()) {
+                    List<String> colSchema = new ArrayList<String>();
+                    colSchema.add(rsColumnType.getString("Type"));
+                    colSchema.add(rsColumnType.getString("Default"));
+                    tableSchema.put(rsColumnType.getString("Field"), colSchema);
+                }
+            } finally {
+                if (rsColumnType != null) {
+                    try {
+                        rsColumnType.close();
+                    } catch (SQLException ignore) { }
+                }
+                if (selectStatement != null) {
+                    try {
+                        selectStatement.close();
+                    } catch (SQLException ignore) { }
+                }
             }
-            
-            rsColumnType.close();
-            
+
+
             schemaCache.put(tableName, tableSchema);
-        	
+
         }
         
         tableSchema = schemaCache.get(tableName);
@@ -70,12 +84,22 @@ public class MySQLDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGenerato
 
         	columnInfo.setTypeName(tableSchema.get(columnName).get(0));
         	try {
-        		String tmpDefaultValue = (String) TypeConverterFactory.getInstance().findTypeConverter(database).convertDatabaseValueToObject(tableSchema.get(columnName).get(1), columnInfo.getDataType(), columnInfo.getColumnSize(), columnInfo.getDecimalDigits(), database);
-        		if ("".equals(tmpDefaultValue)) {
-        			columnInfo.setDefaultValue(null);
-        		} else {
-        			columnInfo.setDefaultValue(tmpDefaultValue);
-        		}
+                String tmpDefaultValue = (String) TypeConverterFactory.getInstance().findTypeConverter(database).convertDatabaseValueToObject(tableSchema.get(columnName).get(1), columnInfo.getDataType(), columnInfo.getColumnSize(), columnInfo.getDecimalDigits(), database);
+                // this just makes explicit the following implicit behavior defined in the mysql docs:
+                // "If an ENUM column is declared to permit NULL, the NULL value is a legal value for
+                // the column, and the default value is NULL. If an ENUM column is declared NOT NULL,
+                // its default value is the first element of the list of permitted values."
+                if (tmpDefaultValue == null && columnInfo.isNullable()) {
+                    columnInfo.setDefaultValue("NULL");
+                }
+                // column is NOT NULL, and this causes no "DEFAULT VALUE XXX" to be generated at all. per
+                // the above from MySQL docs, this will cause the first value in the enumeration to be the
+                // default.
+                else if (tmpDefaultValue == null) {
+                    columnInfo.setDefaultValue(null);
+                } else {
+                    columnInfo.setDefaultValue("'" + database.escapeStringForDatabase(tmpDefaultValue) + "'");
+                }
         	} catch (ParseException e) {
         		throw new DatabaseException(e);
         	}
@@ -87,7 +111,7 @@ public class MySQLDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGenerato
         	
         // Parsing TIMESTAMP database.convertDatabaseValueToObject() produces incorrect results
         // eg. for default value 0000-00-00 00:00:00 we have 0002-11-30T00:00:00.0 as parsing result
-        } else if (columnTypeName.toLowerCase().equals("timestamp") && !"CURRENT_TIMESTAMP".equals(tableSchema.get(columnName).get(1))) {
+        } else if (columnTypeName.toLowerCase().equals("timestamp") && (tableSchema.get(columnName) != null && !"CURRENT_TIMESTAMP".equals(tableSchema.get(columnName).get(1)))) {
         	columnInfo.setTypeName(columnTypeName);
         	columnInfo.setDefaultValue(tableSchema.get(columnName).get(1));
         } else {

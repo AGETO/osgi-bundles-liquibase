@@ -2,16 +2,16 @@ package liquibase.database.core;
 
 import liquibase.database.AbstractDatabase;
 import liquibase.database.DatabaseConnection;
+import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.executor.ExecutorService;
 import liquibase.logging.LogFactory;
 import liquibase.statement.core.RawSqlStatement;
 import liquibase.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.math.BigInteger;
+import java.sql.SQLException;
+import java.util.*;
 
 /**
  * Encapsulates PostgreSQL database support.
@@ -22,6 +22,8 @@ public class PostgresDatabase extends AbstractDatabase {
     private Set<String> systemTablesAndViews = new HashSet<String>();
 
     private String defaultDatabaseSchemaName;
+
+    private Set<String> reservedWords = new HashSet<String>();
 
     public PostgresDatabase() {
 //        systemTablesAndViews.add("pg_logdir_ls");
@@ -74,6 +76,18 @@ public class PostgresDatabase extends AbstractDatabase {
 //        systemTablesAndViews.add("book_pkey");
     }
 
+    @Override
+    public void setConnection(DatabaseConnection conn) {
+        try {
+            reservedWords.addAll(Arrays.asList(((JdbcConnection) conn).getMetaData().getSQLKeywords().toUpperCase().split(",\\s*")));
+            reservedWords.addAll(Arrays.asList("USER", "LIKE", "GROUP", "DATE", "ALL"));
+        } catch (Exception e) {
+            LogFactory.getLogger().warning("Cannot retrieve reserved words", e);
+        }
+
+        super.setConnection(conn);
+    }
+
     public String getTypeName() {
         return "postgresql";
     }
@@ -117,7 +131,9 @@ public class PostgresDatabase extends AbstractDatabase {
 
     @Override
     protected String getDefaultDatabaseSchemaName() throws DatabaseException {
-
+        if (getDefaultSchemaName() != null) {
+            return getDefaultSchemaName();
+        }
         if (defaultDatabaseSchemaName == null) {
             try {
                 List<String> searchPaths = getSearchPaths();
@@ -164,6 +180,8 @@ public class PostgresDatabase extends AbstractDatabase {
         return super.getDatabaseChangeLogLockTableName().toLowerCase();
     }
 
+    
+
 //    public void dropDatabaseObjects(String schema) throws DatabaseException {
 //        try {
 //            if (schema == null) {
@@ -200,16 +218,21 @@ public class PostgresDatabase extends AbstractDatabase {
         return true;
     }
 
-
-
-
     @Override
     public String getAutoIncrementClause() {
         return "";
     }
 
+    @Override
+    public boolean generateAutoIncrementStartWith(BigInteger startWith) {
+    	return false;
+    }
 
-
+    @Override
+    public boolean generateAutoIncrementBy(BigInteger incrementBy) {
+    	return false;
+    }
+    
     @Override
     public String convertRequestedSchemaToSchema(String requestedSchema) throws DatabaseException {
         if (requestedSchema == null)
@@ -219,7 +242,8 @@ public class PostgresDatabase extends AbstractDatabase {
             // Return the catalog name instead..
             return getDefaultCatalogName();
         } else {
-            return StringUtils.trimToNull(requestedSchema).toLowerCase();
+            String schema = StringUtils.trimToNull(requestedSchema);
+            return (schema != null) ? schema.toLowerCase() : schema;
         }
     }
 
@@ -234,7 +258,7 @@ public class PostgresDatabase extends AbstractDatabase {
         if (objectName == null) {
             return null;
         }
-        if (objectName.contains("-") || hasCaseProblems(objectName) || startsWithNumeric(objectName) || isReservedWord(objectName)) {
+        if (objectName.contains("-") || hasMixedCase(objectName) || startsWithNumeric(objectName) || isReservedWord(objectName)) {
             return "\"" + objectName + "\"";
         } else {
             return super.escapeDatabaseObject(objectName);
@@ -245,8 +269,11 @@ public class PostgresDatabase extends AbstractDatabase {
     /*
     * Check if given string has case problems according to postgresql documentation.
     * If there are at least one characters with upper case while all other are in lower case (or vice versa) this string should be escaped.
+    *
+    * Note: This may make postgres support more case sensitive than normally is, but needs to be left in for backwards compatibility.
+    * Method is public so a subclass extension can override it to always return false.
     */
-    private boolean hasCaseProblems(String tableName) {
+    protected boolean hasMixedCase(String tableName) {
         return tableName.matches(".*[A-Z].*") && tableName.matches(".*[a-z].*");
 
     }
@@ -259,21 +286,10 @@ public class PostgresDatabase extends AbstractDatabase {
 
     }
 
-    /*
-    * Check if given string is reserved word.
-    */
-    private boolean isReservedWord(String tableName) {
-        for (int i = 0; i != this.reservedWords.length; i++)
-            if (this.reservedWords[i].toLowerCase().equalsIgnoreCase(tableName))
-                return true;
-        return false;
+    @Override
+    public boolean isReservedWord(String tableName) {
+        return reservedWords.contains(tableName.toUpperCase());
     }
-
-    /*
-    * Reserved words from postgresql documentation
-    */
-    private String[] reservedWords = new String[]{"ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "AUTHORIZATION", "BETWEEN", "BINARY", "BOTH", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN", "CONSTRAINT", "CORRESPONDING", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DESC", "DISTINCT", "DO", "ELSE", "END", "EXCEPT", "FALSE", "FOR", "FOREIGN", "FREEZE", "FROM", "FULL", "GRANT", "GROUP", "HAVING",
-            "ILIKE", "IN", "INITIALLY", "INNER", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "LEADING", "LEFT", "LIKE", "LIMIT", "LOCALTIME", "LOCALTIMESTAMP", "NATURAL", "NEW", "NOT", "NOTNULL", "NULL", "OFF", "OFFSET", "OLD", "ON", "ONLY", "OPEN", "OR", "ORDER", "OUTER", "OVERLAPS", "PLACING", "PRIMARY", "REFERENCES", "RETURNING", "RIGHT", "SELECT", "SESSION_USER", "SIMILAR", "SOME", "SYMMETRIC", "TABLE", "THEN", "TO", "TRAILING", "TRUE", "UNION", "UNIQUE", "USER", "USING", "VERBOSE", "WHEN", "WHERE"};
 
     /*
      * Get the current search paths
@@ -333,6 +349,6 @@ public class PostgresDatabase extends AbstractDatabase {
 
     @Override
     public String escapeIndexName(String schemaName, String indexName) {
-        return indexName;
+        return escapeDatabaseObject(indexName);
     }
 }

@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * Creates a new table.
  */
-public class CreateTableChange extends AbstractChange implements ChangeWithColumns {
+public class CreateTableChange extends AbstractChange implements ChangeWithColumns<ColumnConfig> {
 
     private List<ColumnConfig> columns;
     private String schemaName;
@@ -74,7 +74,7 @@ public class CreateTableChange extends AbstractChange implements ChangeWithColum
             }
 
             if (isAutoIncrement) {
-                statement.addColumnConstraint(new AutoIncrementConstraint(column.getName()));
+                statement.addColumnConstraint(new AutoIncrementConstraint(column.getName(), column.getStartWith(), column.getIncrementBy()));
             }
         }
 

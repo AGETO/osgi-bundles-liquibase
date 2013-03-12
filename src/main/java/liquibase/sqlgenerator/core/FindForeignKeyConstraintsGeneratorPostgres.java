@@ -30,11 +30,11 @@ public class FindForeignKeyConstraintsGeneratorPostgres extends AbstractSqlGener
          StringBuilder sb = new StringBuilder();
 
             sb.append("SELECT ");
-            sb.append("FK.TABLE_NAME as K_Table, ");
-            sb.append("CU.COLUMN_NAME as FK_Column, ");
-            sb.append("PK.TABLE_NAME as PK_Table, ");
-            sb.append("PT.COLUMN_NAME as PK_Column,");
-            sb.append("C.CONSTRAINT_NAME as Constraint_Name ");
+            sb.append("FK.TABLE_NAME as \"").append(FindForeignKeyConstraintsStatement.RESULT_COLUMN_BASE_TABLE_NAME).append("\", ");
+            sb.append("CU.COLUMN_NAME as \"").append(FindForeignKeyConstraintsStatement.RESULT_COLUMN_BASE_TABLE_COLUMN_NAME).append("\", ");
+            sb.append("PK.TABLE_NAME as \"").append(FindForeignKeyConstraintsStatement.RESULT_COLUMN_FOREIGN_TABLE_NAME).append("\", ");
+            sb.append("PT.COLUMN_NAME as \"").append(FindForeignKeyConstraintsStatement.RESULT_COLUMN_FOREIGN_COLUMN_NAME).append("\", ");
+            sb.append("C.CONSTRAINT_NAME as \"").append(FindForeignKeyConstraintsStatement.RESULT_COLUMN_CONSTRAINT_NAME).append("\" ");
             sb.append("FROM       INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS C ");
             sb.append("INNER JOIN  INFORMATION_SCHEMA.TABLE_CONSTRAINTS FK ON C.CONSTRAINT_NAME = FK.CONSTRAINT_NAME ");
             sb.append("INNER JOIN      INFORMATION_SCHEMA.TABLE_CONSTRAINTS PK ON C.UNIQUE_CONSTRAINT_NAME = PK.CONSTRAINT_NAME ");
@@ -45,7 +45,7 @@ public class FindForeignKeyConstraintsGeneratorPostgres extends AbstractSqlGener
             sb.append("  INNER JOIN      INFORMATION_SCHEMA.KEY_COLUMN_USAGE i2 ON i1.CONSTRAINT_NAME = i2.CONSTRAINT_NAME ");
             sb.append("  WHERE       i1.CONSTRAINT_TYPE = 'PRIMARY KEY' ");
             sb.append(") PT ON PT.TABLE_NAME = PK.TABLE_NAME ");
-            sb.append("WHERE      FK.TABLE_NAME='").append(statement.getBaseTableName()).append("'");
+            sb.append("WHERE      lower(FK.TABLE_NAME)='").append(statement.getBaseTableName().toLowerCase()).append("'");
 
         return new Sql[] {
                 new UnparsedSql(sb.toString())

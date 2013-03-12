@@ -377,7 +377,9 @@ public class Diff {
 						continue;
 					}
 
-					if ( idx1.getName().equalsIgnoreCase( idx2.getName() )
+                    String index1Name = StringUtils.trimToEmpty(idx1.getName());
+                    String index2Name = StringUtils.trimToEmpty(idx2.getName());
+                    if ( index1Name.equalsIgnoreCase(index2Name)
 							&& idx1.getTable().getName().equalsIgnoreCase( idx2.getTable().getName() ) )
 					{
 						for ( String column : idx2.getColumns() )
@@ -393,17 +395,6 @@ public class Diff {
 
 				combinedIndexes.add( idx1 );
 			}
-		}
-
-		// Sort the columns.
-		Set<String> sortedColumns = new TreeSet<String>();
-		for ( Index idx : combinedIndexes )
-		{
-			List<String> columns = idx.getColumns();
-			sortedColumns.clear();
-			sortedColumns.addAll( columns );
-			columns.clear();
-			columns.addAll( sortedColumns );
 		}
 
 		indexes.removeAll( indexesToRemove );
@@ -446,17 +437,6 @@ public class Diff {
 
 				combinedConstraints.add( uc1 );
 			}
-		}
-
-		// Sort the columns.
-		Set<String> sortedColumns = new TreeSet<String>();
-		for ( UniqueConstraint uc : combinedConstraints )
-		{
-			List<String> columns = uc.getColumns();
-			sortedColumns.clear();
-			sortedColumns.addAll( columns );
-			columns.clear();
-			columns.addAll( sortedColumns );
 		}
 
 		uniqueConstraints.removeAll( constraintsToRemove );

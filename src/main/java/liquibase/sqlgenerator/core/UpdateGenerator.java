@@ -44,12 +44,18 @@ public class UpdateGenerator extends AbstractSqlGenerator<UpdateStatement> {
 
     private String convertToString(Object newValue, Database database) {
         String sqlString;
-        if (newValue == null || newValue.toString().equals("") || newValue.toString().equalsIgnoreCase("NULL")) {
+        if (newValue == null || newValue.toString().equalsIgnoreCase("NULL")) {
             sqlString = "NULL";
         } else if (newValue instanceof String && database.shouldQuoteValue(((String) newValue))) {
             sqlString = "'" + database.escapeStringForDatabase(newValue.toString()) + "'";
         } else if (newValue instanceof Date) {
-            sqlString = database.getDateLiteral(((Date) newValue));
+          // converting java.util.Date to java.sql.Date
+            Date date = (Date) newValue;
+            if (date.getClass().equals(java.util.Date.class)) {
+                date = new java.sql.Date(date.getTime());
+            }
+
+            sqlString = database.getDateLiteral(date);
         } else if (newValue instanceof Boolean) {
             if (((Boolean) newValue)) {
                 sqlString = TypeConverterFactory.getInstance().findTypeConverter(database).getBooleanType().getTrueBooleanValue();

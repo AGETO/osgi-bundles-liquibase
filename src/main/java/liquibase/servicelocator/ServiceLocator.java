@@ -19,6 +19,15 @@ public class ServiceLocator {
 
     private static ServiceLocator instance;
 
+    static {
+        try {
+            Class<?> scanner = Class.forName("Liquibase.ServiceLocator.ClrServiceLocator, Liquibase");
+            instance = (ServiceLocator) scanner.newInstance();
+        } catch (Exception e) {
+            instance = new ServiceLocator();
+        }
+    }
+
     private ResourceAccessor resourceAccessor;
 
     private Map<Class, List<Class>> classesBySuperclass;
@@ -27,44 +36,46 @@ public class ServiceLocator {
     private PackageScanClassResolver classResolver;
 
     protected ServiceLocator() {
-        this(new ClassLoaderResourceAccessor());
+        this.classResolver = defaultClassLoader();
+        setResourceAccessor(new ClassLoaderResourceAccessor());
     }
 
     protected ServiceLocator(ResourceAccessor accessor) {
+        this.classResolver = defaultClassLoader();
+        setResourceAccessor(accessor);
+    }
+
+    protected ServiceLocator(PackageScanClassResolver classResolver) {
+        this.classResolver = classResolver;
+        setResourceAccessor(new ClassLoaderResourceAccessor());
+    }
+
+    protected ServiceLocator(PackageScanClassResolver classResolver, ResourceAccessor accessor) {
+        this.classResolver = classResolver;
         setResourceAccessor(accessor);
     }
 
     public static ServiceLocator getInstance() {
-    	if(null == instance)
-    		setInstance(new ServiceLocator());
         return instance;
     }
 
-	public static synchronized void setInstance(ServiceLocator serviceLocator) {
-		instance = serviceLocator;
-		if(null != instance)
-			instance.initialize();
-	}
-
-	public void setResourceAccessor(ResourceAccessor resourceAccessor) {
-        this.resourceAccessor = resourceAccessor;
+    public static void setInstance(ServiceLocator newInstance) {
+        instance = newInstance;
     }
 
-	protected PackageScanClassResolver createClassResolver() {
+    private PackageScanClassResolver defaultClassLoader(){
         if (WebSpherePackageScanClassResolver.isWebSphereClassLoader(this.getClass().getClassLoader())) {
             logger.debug("Using WebSphere Specific Class Resolver");
             return new WebSpherePackageScanClassResolver("liquibase/parser/core/xml/dbchangelog-2.0.xsd");
         } else {
-            logger.debug("Using Default Class Resolver");
-        	return new DefaultPackageScanClassResolver();
+            return new DefaultPackageScanClassResolver();
         }
-	}
-	private void initialize() {
-		if(null == resourceAccessor)
-			throw new IllegalStateException("no resource accessor set");
+    }
 
+    public void setResourceAccessor(ResourceAccessor resourceAccessor) {
+        this.resourceAccessor = resourceAccessor;
         this.classesBySuperclass = new HashMap<Class, List<Class>>();
-        this.classResolver = createClassResolver();
+
         this.classResolver.setClassLoaders(new HashSet<ClassLoader>(Arrays.asList(new ClassLoader[] {resourceAccessor.toClassLoader()})));
 
         packagesToScan = new ArrayList<String>();
@@ -93,8 +104,21 @@ public class ServiceLocator {
 	        } catch (IOException e) {
 	            throw new UnexpectedLiquibaseException(e);
 	        }
+
+            if (packagesToScan.size() == 0) {
+                addPackageToScan("liquibase.change");
+                addPackageToScan("liquibase.database");
+                addPackageToScan("liquibase.parser");
+                addPackageToScan("liquibase.precondition");
+                addPackageToScan("liquibase.serializer");
+                addPackageToScan("liquibase.sqlgenerator");
+                addPackageToScan("liquibase.executor");
+                addPackageToScan("liquibase.snapshot");
+                addPackageToScan("liquibase.logging");
+                addPackageToScan("liquibase.ext");
+            }
         }
-	}
+    }
 
     public void addPackageToScan(String packageName) {
         packagesToScan.add(packageName);
@@ -174,12 +198,16 @@ public class ServiceLocator {
 
                     classes.add(clazz);
                 } catch (NoSuchMethodException e) {
-                    logger.info("Can not use "+clazz+" as a Liquibase service because it does not have a default constructor" );
+                    logger.info("Can not use "+clazz+" as a Liquibase service because it does not have a no-argument constructor" );
                 }
             }
         }
 
         return classes;
+    }
+
+    public static void reset() {
+        instance = new ServiceLocator();
     }
 
     protected Logger getLogger() {

@@ -15,6 +15,7 @@ import java.util.Date;
 public class InsertOrUpdateGeneratorOracle extends InsertOrUpdateGenerator {
 
 
+    @Override
     public boolean supports(InsertOrUpdateStatement statement, Database database) {
         return database instanceof OracleDatabase;
     }
@@ -47,6 +48,7 @@ public class InsertOrUpdateGeneratorOracle extends InsertOrUpdateGenerator {
         StringBuffer endStatements = new StringBuffer();
         endStatements.append("END IF;\n");
         endStatements.append("END;\n");
+        endStatements.append("/\n");
         return endStatements.toString();
 
     }

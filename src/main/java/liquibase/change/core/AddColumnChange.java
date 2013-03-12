@@ -1,24 +1,26 @@
 package liquibase.change.core;
 
-import liquibase.change.*;
-import liquibase.database.Database;
-import liquibase.database.core.DB2Database;
-import liquibase.exception.ValidationErrors;
-import liquibase.statement.*;
-import liquibase.statement.core.AddColumnStatement;
-import liquibase.statement.core.ReorganizeTableStatement;
-import liquibase.statement.core.UpdateStatement;
-import liquibase.util.StringUtils;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import liquibase.change.*;
+import liquibase.database.Database;
+import liquibase.database.core.DB2Database;
+import liquibase.exception.ValidationErrors;
+import liquibase.sqlgenerator.SqlGeneratorFactory;
+import liquibase.statement.*;
+import liquibase.statement.core.AddColumnStatement;
+import liquibase.statement.core.ReorganizeTableStatement;
+import liquibase.statement.core.SetColumnRemarksStatement;
+import liquibase.statement.core.UpdateStatement;
+import liquibase.util.StringUtils;
+
 /**
  * Adds a column to an existing table.
  */
-public class AddColumnChange extends AbstractChange implements ChangeWithColumns {
+public class AddColumnChange extends AbstractChange implements ChangeWithColumns<ColumnConfig> {
 
     private String schemaName;
     private String tableName;
@@ -90,7 +92,7 @@ public class AddColumnChange extends AbstractChange implements ChangeWithColumns
             }
 
             if (aColumn.isAutoIncrement() != null && aColumn.isAutoIncrement()) {
-                constraints.add(new AutoIncrementConstraint(aColumn.getName()));
+                constraints.add(new AutoIncrementConstraint(aColumn.getName(), aColumn.getStartWith(), aColumn.getIncrementBy()));
             }
 
             AddColumnStatement addColumnStatement = new AddColumnStatement(getSchemaName(),
@@ -112,6 +114,16 @@ public class AddColumnChange extends AbstractChange implements ChangeWithColumns
                 sql.add(updateStatement);
             }
         }
+
+        for (ColumnConfig column : getColumns()) {
+           String columnRemarks = StringUtils.trimToNull(column.getRemarks());
+           if (columnRemarks != null) {
+               SetColumnRemarksStatement remarksStatement = new SetColumnRemarksStatement(schemaName, tableName, column.getName(), columnRemarks);
+               if (SqlGeneratorFactory.getInstance().supports(remarksStatement, database)) {
+                   sql.add(remarksStatement);
+               }
+           }
+       }
 
 //        for (ColumnConfig aColumn : columns) {
 //            if (aColumn.getConstraints() != null) {

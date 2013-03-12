@@ -8,13 +8,20 @@ import liquibase.statement.DatabaseFunction;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Encapsulates Oracle database support.
  */
 public class OracleDatabase extends AbstractDatabase {
     public static final String PRODUCT_NAME = "oracle";
+
+
+    private Set<String> reservedWords = new HashSet<String>();
 
 	public OracleDatabase() {
 		// Setting list of Oracle's native functions
@@ -36,6 +43,9 @@ public class OracleDatabase extends AbstractDatabase {
             Method method = sqlConn.getClass().getMethod("setRemarksReporting", Boolean.TYPE);
             method.setAccessible(true);
             method.invoke(sqlConn, true);
+
+            reservedWords.addAll(Arrays.asList(sqlConn.getMetaData().getSQLKeywords().toUpperCase().split(",\\s*")));
+            reservedWords.addAll(Arrays.asList("USER", "SESSION","RESOURCE")); //more reserved words not returned by driver
         } catch (Exception e) {
             LogFactory.getLogger().info("Could not set remarks reporting on OracleDatabase: "+e.getMessage());
             ; //cannot set it. That is OK
@@ -47,8 +57,33 @@ public class OracleDatabase extends AbstractDatabase {
         return "oracle";
     }
 
+    @Override
+    public String generatePrimaryKeyName(String tableName) {
+        if (tableName.length() > 27) {
+            return "PK_" + tableName.toUpperCase().substring(0, 27);
+        } else {
+            return "PK_" + tableName.toUpperCase();
+        }
+    }
+
     public boolean supportsInitiallyDeferrableColumns() {
         return true;
+    }
+
+    @Override
+    public String escapeDatabaseObject(String objectName) {
+        // escape the object name if it contains any non-word characters
+        if (objectName != null &&
+                (Pattern.compile("\\W").matcher(objectName).find() || isReservedWord(objectName))) {
+            return "\"" + objectName.trim().toUpperCase() + "\"";
+        } else {
+            return objectName;
+        }
+    }
+
+    @Override
+    public boolean isReservedWord(String objectName) {
+        return reservedWords.contains(objectName.toUpperCase());
     }
 
     @Override

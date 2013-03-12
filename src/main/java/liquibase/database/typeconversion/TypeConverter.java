@@ -34,9 +34,13 @@ public interface TypeConverter extends PrioritizedService {
 
     UUIDType getUUIDType();
 
+    TextType getTextType();
+
     ClobType getClobType();
 
     BlobType getBlobType();
+    
+    BlobType getLongBlobType();
 
     DateType getDateType();
 

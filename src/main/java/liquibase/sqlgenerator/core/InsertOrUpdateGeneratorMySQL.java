@@ -22,21 +22,31 @@ public class InsertOrUpdateGeneratorMySQL extends InsertOrUpdateGenerator {
     @Override
     protected String getInsertStatement(InsertOrUpdateStatement insertOrUpdateStatement, Database database, SqlGeneratorChain sqlGeneratorChain) {
         StringBuffer sql = new StringBuffer(super.getInsertStatement(insertOrUpdateStatement, database, sqlGeneratorChain));
-        String updateSql = super.getUpdateStatement(insertOrUpdateStatement, database, "", sqlGeneratorChain);
         
         sql.deleteCharAt(sql.lastIndexOf(";"));
-        sql.append("ON DUPLICATE KEY UPDATE ");
+        
+        StringBuffer updateClause = new StringBuffer("ON DUPLICATE KEY UPDATE ");
         String[] pkFields=insertOrUpdateStatement.getPrimaryKey().split(",");
         HashSet<String> hashPkFields = new HashSet<String>(Arrays.asList(pkFields));
+        boolean hasFields = false;
         for(String columnKey:insertOrUpdateStatement.getColumnValues().keySet())
         {
             if (!hashPkFields.contains(columnKey)) {
-                sql.append(columnKey).append(" = ");
-                sql.append(convertToString(insertOrUpdateStatement.getColumnValue(columnKey),database));
-                sql.append(",");
+            	hasFields = true;
+            	updateClause.append(columnKey).append(" = ");
+            	updateClause.append(convertToString(insertOrUpdateStatement.getColumnValue(columnKey),database));
+            	updateClause.append(",");
             }
         }
-        sql.deleteCharAt(sql.lastIndexOf(","));
+        
+        if(hasFields) {
+        	// append the updateClause onto the end of the insert statement
+            updateClause.deleteCharAt(updateClause.lastIndexOf(","));
+        	sql.append(updateClause);
+        } else {
+        	// insert IGNORE keyword into insert statement
+        	sql.insert(sql.indexOf("INSERT ")+"INSERT ".length(), "IGNORE ");
+        }
 
         return sql.toString();
     }

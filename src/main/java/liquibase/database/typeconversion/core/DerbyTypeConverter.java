@@ -4,18 +4,33 @@ import liquibase.database.Database;
 import liquibase.database.core.DerbyDatabase;
 import liquibase.database.structure.type.BooleanType;
 import liquibase.database.structure.type.DateTimeType;
+import liquibase.database.structure.type.NumberType;
+import liquibase.database.structure.type.TinyIntType;
+import liquibase.exception.DatabaseException;
 
 import java.text.ParseException;
 import java.sql.Types;
 
 public class DerbyTypeConverter  extends AbstractTypeConverter {
 
+    private BooleanType booleanType;
+
     public int getPriority() {
         return PRIORITY_DATABASE;
     }
 
     public boolean supports(Database database) {
-        return database instanceof DerbyDatabase;
+        boolean supports = database instanceof DerbyDatabase;
+        if (supports) {
+            try {
+                if (database.getDatabaseMajorVersion() >= 10 && database.getDatabaseMinorVersion() >= 7) {
+                    booleanType = new BooleanType("BOOLEAN");
+                }
+            } catch (DatabaseException e) {
+                //can't determine type
+            }
+        }
+        return supports;
     }
 
     @Override
@@ -33,12 +48,25 @@ public class DerbyTypeConverter  extends AbstractTypeConverter {
     }
 
     @Override
-    public BooleanType getBooleanType() {
-        return new BooleanType.NumericBooleanType("SMALLINT");
+    public DateTimeType getDateTimeType() {
+        return new DateTimeType("TIMESTAMP");
     }
 
     @Override
-    public DateTimeType getDateTimeType() {
-        return new DateTimeType("TIMESTAMP");
+    public NumberType getNumberType() {
+        return new NumberType("NUMERIC");
+    }
+
+    @Override
+    public TinyIntType getTinyIntType() {
+        return new TinyIntType("SMALLINT");
+    }
+
+    @Override
+    public BooleanType getBooleanType() {
+        if (this.booleanType != null) {
+            return booleanType;
+        }
+        return new BooleanType.NumericBooleanType("SMALLINT");
     }
 }

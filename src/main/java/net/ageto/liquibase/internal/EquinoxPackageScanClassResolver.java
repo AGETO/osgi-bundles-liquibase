@@ -9,7 +9,7 @@
  * Contributors:
  *     Gunnar Wagenknecht - initial API and implementation
  */
-package org.eclipseguru.liquibase.internal;
+package net.ageto.liquibase.internal;
 
 import java.io.IOException;
 import java.net.URL;

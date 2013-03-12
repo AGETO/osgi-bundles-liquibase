@@ -65,7 +65,7 @@ public class LockService {
         while (!locked && new Date().getTime() < timeToGiveUp) {
             locked = acquireLock();
             if (!locked) {
-                System.out.println("Waiting for changelog lock....");
+                LogFactory.getLogger().info("Waiting for changelog lock....");
                 try {
                     Thread.sleep(changeLogLocRecheckTime);
                 } catch (InterruptedException e) {
@@ -98,7 +98,7 @@ public class LockService {
             database.rollback();
             database.checkDatabaseChangeLogLockTable();
 
-            Boolean locked = (Boolean) ExecutorService.getInstance().getExecutor(database).queryForObject(new SelectFromDatabaseChangeLogLockStatement("locked"), Boolean.class);
+            Boolean locked = (Boolean) ExecutorService.getInstance().getExecutor(database).queryForObject(new SelectFromDatabaseChangeLogLockStatement("LOCKED"), Boolean.class);
 
             if (locked) {
                 return false;
@@ -106,8 +106,13 @@ public class LockService {
 
                 executor.comment("Lock Database");
                 int rowsUpdated = executor.update(new LockDatabaseChangeLogStatement());
-                if (rowsUpdated != 1) {
+                if (rowsUpdated > 1) {
                     throw new LockException("Did not update change log lock correctly");
+                }
+                if (rowsUpdated == 0)
+                {
+                    // another node was faster
+                    return false;
                 }
                 database.commit();
                 LogFactory.getLogger().info("Successfully acquired change log lock");

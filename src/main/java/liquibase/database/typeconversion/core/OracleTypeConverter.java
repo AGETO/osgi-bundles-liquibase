@@ -2,6 +2,7 @@ package liquibase.database.typeconversion.core;
 
 import liquibase.database.Database;
 import liquibase.database.core.OracleDatabase;
+import liquibase.database.structure.Column;
 import liquibase.database.structure.type.*;
 
 import java.sql.Types;
@@ -22,9 +23,9 @@ public class OracleTypeConverter extends AbstractTypeConverter {
 	 * Contains definition of Oracle's data-types
 	 * */
 	@Override
-	protected DataType getDataType(String columnTypeString, Boolean autoIncrement, String dataTypeName, String precision) {
+	protected DataType getDataType(String columnTypeString, Boolean autoIncrement, String dataTypeName, String precision, String additionalInformation) {
 		// Try to define data type by searching of common standard types
-		DataType returnTypeName = super.getDataType(columnTypeString, autoIncrement, dataTypeName, precision);
+		DataType returnTypeName = super.getDataType(columnTypeString, autoIncrement, dataTypeName, precision, additionalInformation);
 		// If we found CustomType (it means - nothing compatible) then search for oracle types
 		if (returnTypeName instanceof CustomType) {
 			if (columnTypeString.toUpperCase().startsWith("VARCHAR2")) {
@@ -37,10 +38,33 @@ public class OracleTypeConverter extends AbstractTypeConverter {
 						returnTypeName.setUnit(typeParams[1]);
 					}
 				}
+			} else if (columnTypeString.toUpperCase().startsWith("NVARCHAR2")) {
+				// NVarchar2 type pattern: VARCHAR2(50 BYTE) | VARCHAR2(50 CHAR)
+				returnTypeName = getNVarcharType();
+				if (precision != null) {
+					String[] typeParams = precision.split(" ");
+					returnTypeName.setFirstParameter(typeParams[0].trim());
+					if (typeParams.length > 1) {
+						returnTypeName.setUnit(typeParams[1]);
+					}
+				}
 			}
 		}
 		return returnTypeName;
 	}
+
+    @Override
+    public String convertToDatabaseTypeString(Column referenceColumn, Database database) {
+        String translatedTypeName = referenceColumn.getTypeName();
+        if ("NVARCHAR2".equals(translatedTypeName)) {
+            translatedTypeName = translatedTypeName+ "(" + referenceColumn.getColumnSize() + ")";
+        } else if ("BINARY_FLOAT".equals(translatedTypeName) || "BINARY_DOUBLE".equals(translatedTypeName)) {
+            // nothing to do
+        } else {
+            translatedTypeName = super.convertToDatabaseTypeString(referenceColumn, database);
+        }
+        return translatedTypeName;
+    }
 
 	@Override
 	public Object convertDatabaseValueToObject(Object defaultValue, int dataType, int columnSize, int decimalDigits, Database database) throws ParseException {

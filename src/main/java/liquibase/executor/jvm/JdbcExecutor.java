@@ -85,7 +85,14 @@ public class JdbcExecutor extends AbstractExecutor implements Executor {
                     }
 
                     log.debug("Executing EXECUTE database command: "+statement);
-                    stmt.execute(statement);
+                    if (statement.contains("?")) {
+                        stmt.setEscapeProcessing(false);
+                    }
+                    try {
+                        stmt.execute(statement);
+                    } catch (SQLException e) {
+                        throw e;
+                    }
                 }
                 return null;
             }
@@ -210,7 +217,7 @@ public class JdbcExecutor extends AbstractExecutor implements Executor {
                 if (sqlToExecute.length != 1) {
                     throw new DatabaseException("Cannot call update on Statement that returns back multiple Sql objects");
                 }
-                log.debug("Executing UPDATE database command: "+sqlToExecute[0]);
+                log.debug("Executing UPDATE database command: "+sqlToExecute[0]);                
                 return stmt.executeUpdate(sqlToExecute[0]);
             }
 

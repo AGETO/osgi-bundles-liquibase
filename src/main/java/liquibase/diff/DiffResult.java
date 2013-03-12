@@ -14,6 +14,8 @@ import liquibase.executor.ExecutorService;
 import liquibase.logging.LogFactory;
 import liquibase.parser.core.xml.LiquibaseEntityResolver;
 import liquibase.parser.core.xml.XMLChangeLogSAXParser;
+import liquibase.serializer.ChangeLogSerializer;
+import liquibase.serializer.ChangeLogSerializerFactory;
 import liquibase.serializer.core.xml.XMLChangeLogSerializer;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.statement.DatabaseFunction;
@@ -34,7 +36,7 @@ import java.util.*;
 
 public class DiffResult {
 
-	private Long idRoot = new Date().getTime();
+	private String idRoot = String.valueOf(new Date().getTime());
 	private int changeNumber = 1;
 
 	private DatabaseSnapshot referenceSnapshot;
@@ -73,6 +75,8 @@ public class DiffResult {
 	private String dataDir = null;
 	private String changeSetContext;
 	private String changeSetAuthor;
+
+	private ChangeLogSerializerFactory serializerFactory = ChangeLogSerializerFactory.getInstance();
 
 	public DiffResult(DatabaseSnapshot referenceDatabaseSnapshot,
 			DatabaseSnapshot targetDatabaseSnapshot) {
@@ -317,10 +321,10 @@ public class DiffResult {
 		printSetComparison("Missing Primary Keys", getMissingPrimaryKeys(), out);
 		printSetComparison("Unexpected Primary Keys",
 				getUnexpectedPrimaryKeys(), out);
+        printSetComparison("Unexpected Unique Constraints",
+                getUnexpectedUniqueConstraints(), out);
 		printSetComparison("Missing Unique Constraints",
 				getMissingUniqueConstraints(), out);
-		printSetComparison("Unexpected Unique Constraints",
-				getUnexpectedUniqueConstraints(), out);
 		printSetComparison("Missing Indexes", getMissingIndexes(), out);
 		printSetComparison("Unexpected Indexes", getUnexpectedIndexes(), out);
 		printSetComparison("Missing Sequences", getMissingSequences(), out);
@@ -398,33 +402,37 @@ public class DiffResult {
 
 	public void printChangeLog(String changeLogFile, Database targetDatabase)
 			throws ParserConfigurationException, IOException, DatabaseException {
-		this.printChangeLog(changeLogFile, targetDatabase,
-				new DefaultXmlWriter());
+		ChangeLogSerializer changeLogSerializer = serializerFactory.getSerializer(changeLogFile);
+		this.printChangeLog(changeLogFile, targetDatabase, changeLogSerializer);
 	}
 
 	public void printChangeLog(PrintStream out, Database targetDatabase)
 			throws ParserConfigurationException, IOException, DatabaseException {
-		this.printChangeLog(out, targetDatabase, new DefaultXmlWriter());
+		this.printChangeLog(out, targetDatabase, new XMLChangeLogSerializer());
 	}
 
 	public void printChangeLog(String changeLogFile, Database targetDatabase,
-			XmlWriter xmlWriter) throws ParserConfigurationException,
+			ChangeLogSerializer changeLogSerializer) throws ParserConfigurationException,
 			IOException, DatabaseException {
 		File file = new File(changeLogFile);
 		if (!file.exists()) {
 			LogFactory.getLogger().info(file + " does not exist, creating");
 			FileOutputStream stream = new FileOutputStream(file);
-			printChangeLog(new PrintStream(stream), targetDatabase, xmlWriter);
+			printChangeLog(new PrintStream(stream), targetDatabase, changeLogSerializer);
 			stream.close();
 		} else {
 			LogFactory.getLogger().info(file + " exists, appending");
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			printChangeLog(new PrintStream(out), targetDatabase, xmlWriter);
+			printChangeLog(new PrintStream(out), targetDatabase, changeLogSerializer);
 
 			String xml = new String(out.toByteArray());
 			xml = xml.replaceFirst("(?ms).*<databaseChangeLog[^>]*>", "");
 			xml = xml.replaceFirst("</databaseChangeLog>", "");
 			xml = xml.trim();
+			if ("".equals( xml )) {
+			    LogFactory.getLogger().info("No changes found, nothing to do");
+			    return;
+			}
 
 			String lineSeparator = System.getProperty("line.separator");
 			BufferedReader fileReader = new BufferedReader(new FileReader(file));
@@ -450,7 +458,9 @@ public class DiffResult {
 
 			RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
 			randomAccessFile.seek(offset);
-			randomAccessFile.writeBytes("    " + xml + lineSeparator);
+			randomAccessFile.writeBytes("    ");
+			randomAccessFile.write( xml.getBytes() );
+			randomAccessFile.writeBytes(lineSeparator);
 			randomAccessFile.writeBytes("</databaseChangeLog>" + lineSeparator);
 			randomAccessFile.close();
 
@@ -466,36 +476,17 @@ public class DiffResult {
 	 * the reference database
 	 */
 	public void printChangeLog(PrintStream out, Database targetDatabase,
-			XmlWriter xmlWriter) throws ParserConfigurationException,
+			ChangeLogSerializer changeLogSerializer)
+			throws ParserConfigurationException,
 			IOException, DatabaseException {
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder documentBuilder = factory.newDocumentBuilder();
-		documentBuilder.setEntityResolver(new LiquibaseEntityResolver());
-
-		Document doc = documentBuilder.newDocument();
-
-		Element changeLogElement = doc.createElement("databaseChangeLog");
-		changeLogElement.setAttribute("xmlns",
-				"http://www.liquibase.org/xml/ns/dbchangelog");
-		changeLogElement.setAttribute("xmlns:xsi",
-				"http://www.w3.org/2001/XMLSchema-instance");
-		changeLogElement
-				.setAttribute(
-						"xsi:schemaLocation",
-						"http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-"
-								+ XMLChangeLogSAXParser.getSchemaVersion()
-								+ ".xsd");
-
-		doc.appendChild(changeLogElement);
-
 		List<ChangeSet> changeSets = new ArrayList<ChangeSet>();
 		addMissingTableChanges(changeSets, targetDatabase);
 		addMissingColumnChanges(changeSets, targetDatabase);
 		addChangedColumnChanges(changeSets);
 		addMissingPrimaryKeyChanges(changeSets);
 		addUnexpectedPrimaryKeyChanges(changeSets);
-		addMissingUniqueConstraintChanges(changeSets);
         addUnexpectedForeignKeyChanges(changeSets);
+		addMissingUniqueConstraintChanges(changeSets);
 		addUnexpectedUniqueConstraintChanges(changeSets);
 
 		if (diffData) {
@@ -503,8 +494,8 @@ public class DiffResult {
 		}
 
 		addMissingForeignKeyChanges(changeSets);
-		addMissingIndexChanges(changeSets);
 		addUnexpectedIndexChanges(changeSets);
+        addMissingIndexChanges(changeSets);
 		addUnexpectedColumnChanges(changeSets);
 		addMissingSequenceChanges(changeSets);
 		addUnexpectedSequenceChanges(changeSets);
@@ -513,14 +504,7 @@ public class DiffResult {
 		addChangedViewChanges(changeSets);
 		addUnexpectedTableChanges(changeSets);
 
-		XMLChangeLogSerializer changeLogSerializer = new XMLChangeLogSerializer();
-		changeLogSerializer.setCurrentChangeLogFileDOM(doc);
-		for (ChangeSet changeSet : changeSets) {
-			doc.getDocumentElement().appendChild(
-					changeLogSerializer.createNode(changeSet));
-		}
-
-		xmlWriter.write(doc, out);
+		changeLogSerializer.write(changeSets, out);
 
 		out.flush();
 	}
@@ -534,7 +518,7 @@ public class DiffResult {
 
 	private ChangeSet generateChangeSet() {
 		return new ChangeSet(generateId(), getChangeSetAuthor(), false, false,
-				null, null, getChangeSetContext(), null);
+				null, getChangeSetContext(), null);
 	}
 
 	private String getChangeSetAuthor() {
@@ -553,14 +537,22 @@ public class DiffResult {
 		this.changeSetAuthor = changeSetAuthor;
 	}
 
-	private String generateId() {
-		return idRoot.toString() + "-" + changeNumber++;
+    public void setIdRoot(String idRoot) {
+        this.idRoot = idRoot;
+    }
+
+    protected String generateId() {
+		return idRoot + "-" + changeNumber++;
 	}
 
 	private void addUnexpectedIndexChanges(List<ChangeSet> changes) {
 		for (Index index : getUnexpectedIndexes()) {
 
-			DropIndexChange change = new DropIndexChange();
+            if (index.getAssociatedWith().contains(Index.MARK_PRIMARY_KEY) || index.getAssociatedWith().contains(Index.MARK_FOREIGN_KEY) || index.getAssociatedWith().contains(Index.MARK_UNIQUE_CONSTRAINT)) {
+                continue;
+            }
+
+            DropIndexChange change = new DropIndexChange();
 			change.setTableName(index.getTable().getName());
 			change.setSchemaName(index.getTable().getSchema());
 			change.setIndexName(index.getName());
@@ -580,6 +572,10 @@ public class DiffResult {
 			change.setIndexName(index.getName());
 			change.setUnique(index.isUnique());
 			change.setAssociatedWith(index.getAssociatedWithAsString());
+
+            if (index.getAssociatedWith().contains(Index.MARK_PRIMARY_KEY) || index.getAssociatedWith().contains(Index.MARK_FOREIGN_KEY) || index.getAssociatedWith().contains(Index.MARK_UNIQUE_CONSTRAINT)) {
+                continue;
+            }
 
 			for (String columnName : index.getColumns()) {
 				ColumnConfig column = new ColumnConfig();
@@ -797,7 +793,18 @@ public class DiffResult {
 					change.setColumnName(column.getName());
 					change.setColumnDataType(targetTypeConverter.convertToDatabaseTypeString(referenceColumn, targetSnapshot.getDatabase()));
 
-					changes.add(generateChangeSet(change));
+                    Object defaultValue = column.getDefaultValue();
+                    String defaultValueString;
+                    if (defaultValue != null) {
+                        defaultValueString = targetTypeConverter.getDataType(defaultValue).convertObjectToString(defaultValue, targetSnapshot.getDatabase());
+
+                        if (defaultValueString != null) {
+                            change.setDefaultNullValue(defaultValueString);
+                        }
+                    }
+
+
+                    changes.add(generateChangeSet(change));
 					foundDifference = true;
 				}
 
@@ -859,14 +866,21 @@ public class DiffResult {
 			if (column.getRemarks() != null) {
 				columnConfig.setRemarks(column.getRemarks());
 			}
+            ConstraintsConfig constraintsConfig = columnConfig.getConstraints();
 			if (column.isNullable() != null && !column.isNullable()) {
-				ConstraintsConfig constraintsConfig = columnConfig
-						.getConstraints();
 				if (constraintsConfig == null) {
 					constraintsConfig = new ConstraintsConfig();
-					columnConfig.setConstraints(constraintsConfig);
 				}
 				constraintsConfig.setNullable(false);
+			}
+            if (column.isUnique()) {
+				if (constraintsConfig == null) {
+					constraintsConfig = new ConstraintsConfig();
+				}
+				constraintsConfig.setUnique(true);
+			}
+			if (constraintsConfig != null) {
+				columnConfig.setConstraints(constraintsConfig);
 			}
 
 			change.addColumn(columnConfig);
@@ -927,6 +941,12 @@ public class DiffResult {
 
 					constraintsConfig.setNullable(false);
 				}
+//                if (column.isUnique()) {
+//					if (constraintsConfig == null) {
+//						constraintsConfig = new ConstraintsConfig();
+//					}
+//					constraintsConfig.setUnique(true);
+//				}
 				if (constraintsConfig != null) {
 					columnConfig.setConstraints(constraintsConfig);
 				}
@@ -986,7 +1006,7 @@ public class DiffResult {
                     columnNames.add(column.getName());
                 }
 
-				// if dataDir is not null, print out a csv file and use loadData
+				// if dataOutputDirectory is not null, print out a csv file and use loadData
 				// tag
 				if (dataDir != null) {
 					String fileName = table.getName().toLowerCase() + ".csv";
@@ -1003,8 +1023,7 @@ public class DiffResult {
 								+ " is not a directory");
 					}
 
-					CSVWriter outputFile = new CSVWriter(new FileWriter(
-							fileName));
+					CSVWriter outputFile = new CSVWriter(new BufferedWriter(new FileWriter(fileName)));
 					String[] dataTypes = new String[columnNames.size()];
 					String[] line = new String[columnNames.size()];
 					for (int i = 0; i < columnNames.size(); i++) {
@@ -1060,7 +1079,7 @@ public class DiffResult {
 					}
 
 					changes.add(change);
-				} else { // if dataDir is null, build and use insert tags
+				} else { // if dataOutputDirectory is null, build and use insert tags
 					for (Map row : rs) {
 						InsertDataChange change = new InsertDataChange();
 						change.setSchemaName(schema);
@@ -1081,7 +1100,7 @@ public class DiffResult {
 							} else if (value instanceof Date) {
 								column.setValueDate((Date) value);
 							} else { // string
-								column.setValue(value.toString());
+								column.setValue(value.toString().replace("\\","\\\\"));
 							}
 
 							change.addColumn(column);

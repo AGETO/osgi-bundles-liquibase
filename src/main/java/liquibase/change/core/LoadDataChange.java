@@ -3,6 +3,8 @@ package liquibase.change.core;
 import liquibase.change.*;
 import liquibase.database.Database;
 import liquibase.exception.UnexpectedLiquibaseException;
+import liquibase.logging.LogFactory;
+import liquibase.logging.Logger;
 import liquibase.resource.ResourceAccessor;
 import liquibase.statement.SqlStatement;
 import liquibase.statement.core.InsertStatement;
@@ -16,12 +18,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class LoadDataChange extends AbstractChange implements ChangeWithColumns {
+public class LoadDataChange extends AbstractChange implements ChangeWithColumns<LoadDataColumnConfig> {
 
     private String schemaName;
     private String tableName;
     private String file;
     private String encoding = null;
+    private String separator = liquibase.util.csv.opencsv.CSVReader.DEFAULT_SEPARATOR + "";
+	private String quotchar = liquibase.util.csv.opencsv.CSVReader.DEFAULT_QUOTE_CHARACTER + "";
+
+
     private List<LoadDataColumnConfig> columns = new ArrayList<LoadDataColumnConfig>();
 
 
@@ -66,17 +72,34 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns 
         this.encoding = encoding;
     }
 
-    public void addColumn(ColumnConfig column) {
-      	columns.add((LoadDataColumnConfig) column);
+    public String getSeparator() {
+		return separator;
+	}
+
+	public void setSeparator(String separator) {
+		this.separator = separator;
+	}
+
+	public String getQuotchar() {
+		return quotchar;
+	}
+
+	public void setQuotchar(String quotchar) {
+		this.quotchar = quotchar;
+	}
+
+	public void addColumn(LoadDataColumnConfig column) {
+      	columns.add(column);
     }
 
-    public List<ColumnConfig> getColumns() {
-        return (List<ColumnConfig>) (List) columns;
+    public List<LoadDataColumnConfig> getColumns() {
+        return (List<LoadDataColumnConfig>) columns;
     }
 
     public SqlStatement[] generateStatements(Database database) {
+        CSVReader reader = null;
         try {
-            CSVReader reader = getCSVReader();
+            reader = getCSVReader();
 
             String[] headers = reader.readNext();
             if (headers == null) {
@@ -85,13 +108,21 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns 
 
             List<SqlStatement> statements = new ArrayList<SqlStatement>();
             String[] line = null;
+            int lineNumber = 0;
+
             while ((line = reader.readNext()) != null) {
+                lineNumber++;
+
                 if (line.length == 0 || (line.length == 1 && StringUtils.trimToNull(line[0]) == null)) {
                     continue; //nothing on this line
                 }
                 InsertStatement insertStatement = this.createStatement(getSchemaName(), getTableName());
                 for (int i=0; i<headers.length; i++) {
                     String columnName = null;
+                    if( i >= line.length ) {
+                      throw new UnexpectedLiquibaseException("CSV Line " + lineNumber + " has only " + (i-1) + " columns, the header has " + headers.length);
+                    }
+
                     Object value = line[i];
 
                     ColumnConfig columnConfig = getColumnConfig(i, headers[i]);
@@ -129,10 +160,25 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns 
                 statements.add(insertStatement);
             }
 
-            return statements.toArray(new SqlStatement[statements.size()]); 
+            return statements.toArray(new SqlStatement[statements.size()]);
         } catch (IOException e) {
             throw new RuntimeException(e);
-        }
+        } catch (UnexpectedLiquibaseException ule) {
+                if (getChangeSet() != null && getChangeSet().getFailOnError() != null && !getChangeSet().getFailOnError()) {
+                    Logger log = LogFactory.getLogger();
+                    log.info("Change set " + getChangeSet().toString(false) + " failed, but failOnError was false.  Error: " + ule.getMessage());        
+                }
+
+            return new SqlStatement[0];
+        } finally {
+			if (null != reader) {
+				try {
+					reader.close();
+				} catch (IOException e) {
+					;
+				}
+			}
+		}
     }
 
     protected CSVReader getCSVReader() throws IOException {
@@ -152,7 +198,16 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns 
             streamReader = new InputStreamReader(stream, getEncoding());
         }
 
-        CSVReader reader = new CSVReader(streamReader);
+        char quotchar;
+        if (0 == this.quotchar.length() ) {
+        	// hope this is impossible to have a field surrounded with non ascii char 0x01
+        	quotchar = '\1';
+        } else {
+        	quotchar = this.quotchar.charAt(0);
+        }
+
+        CSVReader reader = new CSVReader(streamReader, separator.charAt(0), quotchar );
+
         return reader;
     }
 

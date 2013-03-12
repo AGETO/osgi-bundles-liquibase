@@ -39,26 +39,39 @@ public class MSSQLTypeConverter extends AbstractTypeConverter {
 
     @Override
     public DataType getDataType(String columnTypeString, Boolean autoIncrement) {
-        DataType type = super.getDataType(columnTypeString, autoIncrement);
-        if (autoIncrement != null && autoIncrement) {
-            type.setDataTypeName(type.getDataTypeName().replaceFirst(" identity$", ""));
+//        System.out.println("IN :columnTypeString=" +columnTypeString +", autoIncrement=" +autoIncrement);
+        if (columnTypeString.toLowerCase().endsWith("() identity")) {
+            columnTypeString = columnTypeString.replaceFirst("\\(\\) identity$", "");
+            autoIncrement = true;
         }
-        return type;
+
+        if (columnTypeString.toLowerCase().endsWith(" identity")) {
+            columnTypeString = columnTypeString.replaceFirst(" identity$", "");
+            autoIncrement = true;
+        }
+        if (columnTypeString.equalsIgnoreCase("varbinary(2147483647)")){
+            columnTypeString = "varbinary(max)";
+        }
+        return super.getDataType(columnTypeString, autoIncrement);
     }
 
-    /**
-     * Extension of super.getDataType(String columnTypeString, Boolean autoIncrement, String dataTypeName, String precision)<br>
-     * Contains definition of Oracle's data-types
-     * */
     @Override
-    protected DataType getDataType(String columnTypeString, Boolean autoIncrement, String dataTypeName, String precision) {
+    protected DataType getDataType(String columnTypeString, Boolean autoIncrement, String dataTypeName, String precision, String additionalInformation) {
+        if (columnTypeString.endsWith(" identity")) {
+            columnTypeString = columnTypeString.replaceFirst(" identity$", "");
+            autoIncrement = true;
+        }
+        if (columnTypeString.equalsIgnoreCase("varbinary") && (precision==null || Long.valueOf(precision) > 8000)) {
+            precision = "max";
+        }
+
         // Try to define data type by searching of common standard types
-        DataType returnTypeName = super.getDataType(columnTypeString, autoIncrement, dataTypeName, precision);
+        DataType returnTypeName = super.getDataType(columnTypeString, autoIncrement, dataTypeName, precision, additionalInformation);
         // If we found CustomType (it means - nothing compatible) then search for oracle types
         if (returnTypeName instanceof CustomType) {
             boolean returnTypeChanged=false;
             if (columnTypeString.toUpperCase().startsWith("NVARCHAR")) {
-                returnTypeName = new VarcharType("NVARCHAR");
+                returnTypeName = new NVarcharType();
                 returnTypeChanged=true;
             } else if(columnTypeString.toUpperCase().startsWith("NCHAR")) {
                 returnTypeName= new CharType("NCHAR");
@@ -99,13 +112,21 @@ public class MSSQLTypeConverter extends AbstractTypeConverter {
 
     @Override
     public ClobType getClobType() {
-        return new ClobType("TEXT");
+        return new ClobType("NVARCHAR(MAX)");
     }
 
     @Override
     public BlobType getBlobType() {
-        return new BlobType("IMAGE");
+        return new BlobType("VARBINARY(MAX)");
     }
 
+    @Override
+    public NumberType getNumberType() {
+      return new NumberType("NUMERIC");
+    }
 
+    @Override
+    public DoubleType getDoubleType() {
+        return new DoubleType("FLOAT");
+    }
 }

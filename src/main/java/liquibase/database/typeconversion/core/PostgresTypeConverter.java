@@ -2,10 +2,7 @@ package liquibase.database.typeconversion.core;
 
 import liquibase.database.Database;
 import liquibase.database.core.PostgresDatabase;
-import liquibase.database.structure.type.BlobType;
-import liquibase.database.structure.type.ClobType;
-import liquibase.database.structure.type.DateTimeType;
-import liquibase.database.structure.type.DataType;
+import liquibase.database.structure.type.*;
 
 import java.text.ParseException;
 import java.sql.Types;
@@ -41,8 +38,10 @@ public class PostgresTypeConverter extends AbstractTypeConverter {
     public DataType getDataType(String columnTypeString, Boolean autoIncrement) {
         DataType type = super.getDataType(columnTypeString, autoIncrement);
 
-        if (type.getDataTypeName().startsWith("TEXT(")) {
+        if (type.getDataTypeName().toLowerCase().contains("text")) {
             type = getClobType();
+        } else if (type.getDataTypeName().toLowerCase().contains("blob")) {
+            type = getBlobType();
         } else if (type.getDataTypeName().toLowerCase().startsWith("float8")) {
             type.setDataTypeName("FLOAT8");
         } else if (type.getDataTypeName().toLowerCase().startsWith("float4")) {
@@ -89,5 +88,20 @@ public class PostgresTypeConverter extends AbstractTypeConverter {
     @Override
     public DateTimeType getDateTimeType() {
         return new DateTimeType("TIMESTAMP WITH TIME ZONE");
+    }
+
+    @Override
+    public NumberType getNumberType() {
+        return new NumberType("NUMERIC");
+    }
+
+    @Override
+    public TinyIntType getTinyIntType() {
+        return new TinyIntType("SMALLINT");
+    }
+
+    @Override
+    public DoubleType getDoubleType() {
+        return new DoubleType("DOUBLE PRECISION");
     }
 }

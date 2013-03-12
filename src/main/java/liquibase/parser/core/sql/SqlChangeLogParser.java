@@ -37,10 +37,11 @@ public class SqlChangeLogParser implements ChangeLogParser {
         change.setSplitStatements(false);
         change.setStripComments(false);
 
-        ChangeSet changeSet = new ChangeSet("raw", "includeAll", false, false, physicalChangeLogLocation, physicalChangeLogLocation, null, null, true);
+        ChangeSet changeSet = new ChangeSet("raw", "includeAll", false, false, physicalChangeLogLocation, null, null, true);
         changeSet.addChange(change);
 
-        DatabaseChangeLog changeLog = new DatabaseChangeLog(physicalChangeLogLocation);
+        DatabaseChangeLog changeLog = new DatabaseChangeLog();
+        changeLog.setPhysicalFilePath(physicalChangeLogLocation);
         changeLog.addChangeSet(changeSet);
 
         return changeLog;

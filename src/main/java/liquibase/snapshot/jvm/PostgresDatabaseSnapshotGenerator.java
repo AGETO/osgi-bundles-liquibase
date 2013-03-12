@@ -7,6 +7,7 @@ import liquibase.database.structure.Table;
 import liquibase.database.structure.UniqueConstraint;
 import liquibase.exception.DatabaseException;
 import liquibase.snapshot.DatabaseSnapshot;
+import liquibase.util.StringUtils;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -22,6 +23,21 @@ public class PostgresDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGener
 
     public int getPriority(Database database) {
         return PRIORITY_DATABASE;
+    }
+
+    @Override
+    protected String convertTableNameToDatabaseTableName(String tableName) {
+        return tableName.toLowerCase();
+    }
+
+    @Override
+    protected String convertColumnNameToDatabaseTableName(String columnName) {
+        return columnName.toLowerCase();
+    }
+
+    @Override
+    protected String convertPrimaryKeyName(String pkName) throws SQLException {
+        return pkName.toLowerCase();
     }
 
     @Override
@@ -47,7 +63,7 @@ public class PostgresDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGener
             rs = statement.executeQuery();
             while (rs.next()) {
                 String constraintName = rs.getString("conname");
-                int conrelid = rs.getInt("conrelid");
+                long conrelid = rs.getLong("conrelid");
                 Array keys = rs.getArray("conkey");
                 String tableName = rs.getString("relname");
                 UniqueConstraint constraintInformation = new UniqueConstraint();
@@ -66,7 +82,11 @@ public class PostgresDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGener
             snapshot.getUniqueConstraints().addAll(foundUC);
         }
         finally {
-            rs.close();
+            try {
+                if (rs != null) {
+                    rs.close();
+                }
+            } catch (SQLException ignored) { }
             if (statement != null) {
                 statement.close();
             }
@@ -74,16 +94,25 @@ public class PostgresDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGener
         }
     }
 
-    protected void getColumnsForUniqueConstraint(Database database, int conrelid, Array keys, UniqueConstraint constraint) throws SQLException {
+    protected void getColumnsForUniqueConstraint(Database database, long conrelid, Array keys, UniqueConstraint constraint) throws SQLException {
         HashMap<Integer, String> columns_map = new HashMap<Integer, String>();
         PreparedStatement stmt = null;
         ResultSet rs = null;
         try {
-            stmt = ((JdbcConnection) database.getConnection()).getUnderlyingConnection().prepareStatement("select attname,attnum from pg_attribute where attrelid = ? and attnum in (" + keys.toString().replace("{", "").replace("}", "") + ")");
-            stmt.setInt(1, conrelid);
+            String str = null;
+            Object arrays = keys.getArray();
+            if (arrays instanceof Integer[]) {
+                str = StringUtils.join((Integer[])arrays, ",");
+            } else if (arrays instanceof int[]) {
+                str = StringUtils.join((int[])arrays, ",");
+            } else {
+                throw new SQLException("Can't detect type of array " + arrays);
+            }
+            stmt = ((JdbcConnection) database.getConnection()).getUnderlyingConnection().prepareStatement("select attname,attnum from pg_attribute where attrelid = ? and attnum in (" + str + ")");
+            stmt.setLong(1, conrelid);
             rs = stmt.executeQuery();
             while (rs.next()) {
-                columns_map.put(new Integer(rs.getInt("attnum")), rs.getString("attname"));
+                columns_map.put(rs.getInt("attnum"), rs.getString("attname"));
             }
             StringTokenizer str_token = new StringTokenizer(keys.toString().replace("{", "").replace("}", ""), ",");
             while (str_token.hasMoreTokens()) {
@@ -92,7 +121,11 @@ public class PostgresDatabaseSnapshotGenerator extends JdbcDatabaseSnapshotGener
             }
         }
         finally {
-            rs.close();
+            if (rs != null) {
+                try {
+                    rs.close();
+                } catch (SQLException ignored) { }
+            }
             if (stmt != null)
                 stmt.close();
         }

@@ -36,10 +36,14 @@ public class StringUtils {
      * @param multiLineSQL A String containing all the SQL statements
      * @param stripComments If true then comments will be stripped, if false then they will be left in the code
      */
-    public static String[] processMutliLineSQL(String multiLineSQL,boolean stripComments, String endDelimiter) {
+    public static String[] processMutliLineSQL(String multiLineSQL,boolean stripComments, boolean splitStatements, String endDelimiter) {
         
         String stripped = stripComments ? stripComments(multiLineSQL) : multiLineSQL;
-        return splitSQL(stripped, endDelimiter);
+	if (splitStatements) {
+	    return splitSQL(stripped, endDelimiter);
+	} else {
+	    return new String[]{stripped};
+	}
     }
 
     /**
@@ -48,14 +52,23 @@ public class StringUtils {
     public static String[] splitSQL(String multiLineSQL, String endDelimiter) {
         if (endDelimiter == null) {
             endDelimiter = ";\\s*\n|;$|\n[gG][oO]\\s*\n|\n[Gg][oO]\\s*$";
+        } else {
+            if (endDelimiter.equalsIgnoreCase("go")) {
+                endDelimiter = "\n[gG][oO]\\s*\n|\n[Gg][oO]\\s*$";
+            }
         }
-        String[] strings = multiLineSQL.split(endDelimiter);
-        for (int i=0; i<strings.length; i++) {
-            strings[i] = strings[i].trim();
+        String[] initialSplit = multiLineSQL.split(endDelimiter);
+        List<String> strings = new ArrayList<String>();
+        for (String anInitialSplit : initialSplit) {
+            String singleLineSQL = anInitialSplit.trim();
+            if (singleLineSQL.length() > 0) {
+                strings.add(singleLineSQL);
+            }
         }
-        return strings;
+
+        return strings.toArray(new String[strings.size()]);
     }
-    
+
     /**
      * Searches through a String which contains SQL code and strips out
      * any comments that are between \/**\/ or anything that matches
@@ -113,5 +126,36 @@ public class StringUtils {
         }
 
         return returnString;
+    }
+
+    public static String join(Integer[] array, String delimiter) {
+        if (array == null) {
+            return null;
+        }
+
+        int[] ints = new int[array.length];
+        for (int i=0; i < ints.length; i++)
+        {
+            ints[i] = array[i];
+        }
+	return StringUtils.join(ints, delimiter);
+    }
+
+    public static String join(int[] array, String delimiter) {
+        if (array == null) {
+            return null;
+        }
+
+        if (array.length == 0) {
+            return "";
+        }
+
+        StringBuffer buffer = new StringBuffer();
+        for (int val : array) {
+            buffer.append(val).append(delimiter);
+        }
+
+        String returnString = buffer.toString();
+        return returnString.substring(0, returnString.length()-delimiter.length());
     }
 }

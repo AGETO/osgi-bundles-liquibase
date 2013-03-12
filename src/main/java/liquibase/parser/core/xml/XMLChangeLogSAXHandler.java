@@ -7,7 +7,17 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLDecoder;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.Stack;
+import java.util.TreeSet;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -86,7 +96,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 		log = LogFactory.getLogger();
 		this.resourceAccessor = resourceAccessor;
 
-		databaseChangeLog = new DatabaseChangeLog(physicalChangeLogLocation);
+		databaseChangeLog = new DatabaseChangeLog();
 		databaseChangeLog.setPhysicalFilePath(physicalChangeLogLocation);
 		databaseChangeLog.setChangeLogParameters(changeLogParameters);
 
@@ -135,7 +145,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 			} else if ("includeAll".equals(qName)) {
 				String pathName = atts.getValue("path");
 				pathName = pathName.replace('\\', '/');
-				
+
 				if (!(pathName.endsWith("/"))) {
 					pathName = pathName + '/';
 				}
@@ -173,7 +183,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
                 Set<String> seenPaths = new HashSet<String>();
 				for (URL fileUrl : resources) {
 					if (!fileUrl.toExternalForm().startsWith("file:")) {
-                        if (fileUrl.toExternalForm().startsWith("jar:file:")) {
+                        if (fileUrl.toExternalForm().startsWith("jar:file:") || fileUrl.toExternalForm().startsWith("wsjar:file:") || fileUrl.toExternalForm().startsWith("zip:")) {
                             File zipFileDir = extractZipFile(fileUrl);
                             fileUrl = new File(zipFileDir, pathName).toURL();
                         } else {
@@ -233,7 +243,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 				}
 
 				changeSet = new ChangeSet(atts.getValue("id"), atts.getValue("author"), alwaysRun, runOnChange, filePath,
-						databaseChangeLog.getPhysicalFilePath(), atts.getValue("context"), atts.getValue("dbms"),
+						atts.getValue("context"), atts.getValue("dbms"),
 						Boolean.valueOf(atts.getValue("runInTransaction")));
 				if (StringUtils.trimToNull(atts.getValue("failOnError")) != null) {
 					changeSet.setFailOnError(Boolean.parseBoolean(atts.getValue("failOnError")));
@@ -349,6 +359,8 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 					String attributeValue = atts.getValue(i);
 					setProperty(change, attributeName, attributeValue);
 				}
+				
+				change.setChangeLogParameters(this.changeLogParameters);
 				change.init();
 			} else if (change != null && "column".equals(qName)) {
 				ColumnConfig column;
@@ -481,7 +493,13 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
         }
 
 		if (isRelativePath) {
-			fileName = FilenameUtils.concat(FilenameUtils.getFullPath(relativeBaseFileName), fileName);
+			// workaround for FilenameUtils.normalize() returning null for relative paths like ../conf/liquibase.xml
+			String tempFile = FilenameUtils.concat(FilenameUtils.getFullPath(relativeBaseFileName), fileName);
+			if(tempFile != null && new File(tempFile).exists() == true) {
+				fileName = tempFile;
+			} else {
+				fileName = FilenameUtils.getFullPath(relativeBaseFileName) + fileName;
+			}
 		}
 		DatabaseChangeLog changeLog = ChangeLogParserFactory.getInstance().getParser(fileName, resourceAccessor).parse(fileName, changeLogParameters,
 						resourceAccessor);
@@ -494,7 +512,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 					preconditions);
 		}
 		for (ChangeSet changeSet : changeLog.getChangeSets()) {
-			databaseChangeLog.addChangeSet(changeSet);
+			handleChangeSet(changeSet);
 		}
 
 		return true;
@@ -607,7 +625,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 					&& localName.equals(change.getChangeMetaData().getName())) {
 				if (textString != null) {
 					if (change instanceof RawSQLChange) {
-						((RawSQLChange) change).setSql(textString);
+						((RawSQLChange) change).setSql(changeLogParameters.expandExpressions(textString));
 					} else if (change instanceof CreateProcedureChange) {
 						((CreateProcedureChange) change)
 								.setProcedureBody(textString);

@@ -24,7 +24,7 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
             if (changeLogFile.endsWith(".sql")) {
                 reader = new BufferedReader(new InputStreamReader(openChangeLogFile(changeLogFile, resourceAccessor)));
 
-                return reader.readLine().startsWith("--liquibase formatted");
+                return reader.readLine().matches("\\-\\-\\s*liquibase formatted.*");
             } else {
                 return false;
             }
@@ -48,7 +48,8 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
 
     public DatabaseChangeLog parse(String physicalChangeLogLocation, ChangeLogParameters changeLogParameters, ResourceAccessor resourceAccessor) throws ChangeLogParseException {
 
-        DatabaseChangeLog changeLog = new DatabaseChangeLog(physicalChangeLogLocation);
+        DatabaseChangeLog changeLog = new DatabaseChangeLog();
+        changeLog.setPhysicalFilePath(physicalChangeLogLocation);
 
         BufferedReader reader = null;
 
@@ -59,8 +60,8 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
 
             ChangeSet changeSet = null;
             RawSQLChange change = null;
-            Pattern changeSetPattern = Pattern.compile("\\-\\-changeset (\\w+):(\\w+).*", Pattern.CASE_INSENSITIVE);
-            Pattern rollbackPattern = Pattern.compile("\\s*\\-\\-rollback (.*)", Pattern.CASE_INSENSITIVE);
+            Pattern changeSetPattern = Pattern.compile("\\-\\-[\\s]*changeset (\\w+):(\\w+).*", Pattern.CASE_INSENSITIVE);
+            Pattern rollbackPattern = Pattern.compile("\\s*\\-\\-[\\s]*rollback (.*)", Pattern.CASE_INSENSITIVE);
             Pattern stripCommentsPattern = Pattern.compile(".*stripComments:(\\w+).*", Pattern.CASE_INSENSITIVE);
             Pattern splitStatementsPattern = Pattern.compile(".*splitStatements:(\\w+).*", Pattern.CASE_INSENSITIVE);
             Pattern endDelimiterPattern = Pattern.compile(".*endDelimiter:(\\w+).*", Pattern.CASE_INSENSITIVE);
@@ -76,7 +77,7 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
             while ((line = reader.readLine()) != null) {
                 Matcher changeSetPatternMatcher = changeSetPattern.matcher(line);
                 if (changeSetPatternMatcher.matches()) {
-                    String finalCurrentSql = StringUtils.trimToNull(currentSql.toString());
+                    String finalCurrentSql = changeLogParameters.expandExpressions(StringUtils.trimToNull(currentSql.toString()));
                     if (changeSet != null) {
 
                         if (finalCurrentSql == null) {
@@ -86,14 +87,14 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
                         change.setSql(finalCurrentSql);
 
                         if (StringUtils.trimToNull(currentRollbackSql.toString()) != null) {
-                        	try {
-                        		if (currentRollbackSql.toString().trim().toLowerCase().matches("^not required.*")) {
-                        			changeSet.addRollbackChange(new EmptyChange());
-                        		} else {
-                        			RawSQLChange rollbackChange = new RawSQLChange();
-                        			rollbackChange.setSql(currentRollbackSql.toString());
-                        			changeSet.addRollbackChange(rollbackChange);
-                        		}
+                            try {
+                                if (currentRollbackSql.toString().trim().toLowerCase().matches("^not required.*")) {
+                                    changeSet.addRollbackChange(new EmptyChange());
+                                } else {
+                                    RawSQLChange rollbackChange = new RawSQLChange();
+                                    rollbackChange.setSql(changeLogParameters.expandExpressions(currentRollbackSql.toString()));
+                                    changeSet.addRollbackChange(rollbackChange);
+                                }
                             } catch (UnsupportedChangeException e) {
                                 throw new RuntimeException(e);
                             }
@@ -122,7 +123,7 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
                     String context = parseString(contextPatternMatcher);
                     String dbms = parseString(dbmsPatternMatcher);
 
-                    changeSet = new ChangeSet(changeSetPatternMatcher.group(2), changeSetPatternMatcher.group(1), runAlways, runOnChange, physicalChangeLogLocation, physicalChangeLogLocation, context, dbms, runInTransaction);
+                    changeSet = new ChangeSet(changeSetPatternMatcher.group(2), changeSetPatternMatcher.group(1), runAlways, runOnChange, physicalChangeLogLocation, context, dbms, runInTransaction);
                     changeSet.setFailOnError(failOnError);
                     changeLog.addChangeSet(changeSet);
 
@@ -151,7 +152,7 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
             }
 
             if (changeSet != null) {
-                change.setSql(StringUtils.trimToNull(currentSql.toString()));
+                change.setSql(changeLogParameters.expandExpressions(StringUtils.trimToNull(currentSql.toString())));
 
                 if (StringUtils.trimToNull(currentRollbackSql.toString()) != null) {
                     try {
@@ -159,7 +160,7 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
                             changeSet.addRollbackChange(new EmptyChange());
                         } else {
                             RawSQLChange rollbackChange = new RawSQLChange();
-                            rollbackChange.setSql(currentRollbackSql.toString());
+                            rollbackChange.setSql(changeLogParameters.expandExpressions(currentRollbackSql.toString()));
                             changeSet.addRollbackChange(rollbackChange);
                         }
                     } catch (UnsupportedChangeException e) {
@@ -170,6 +171,12 @@ public class FormattedSqlChangeLogParser implements ChangeLogParser {
 
         } catch (IOException e) {
             throw new ChangeLogParseException(e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException ignore) { }
+            }
         }
 
         return changeLog;

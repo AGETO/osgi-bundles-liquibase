@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-public class AddColumnStatement implements SqlStatement {
+public class AddColumnStatement extends AbstractSqlStatement {
 
     private String schemaName;
     private String tableName;
@@ -53,6 +53,19 @@ public class AddColumnStatement implements SqlStatement {
             }
         }
         return false;
+    }
+
+    public AutoIncrementConstraint getAutoIncrementConstraint() {
+        AutoIncrementConstraint autoIncrementConstraint = null;
+        
+        for (ColumnConstraint constraint : getConstraints()) {
+            if (constraint instanceof AutoIncrementConstraint) {
+                autoIncrementConstraint = (AutoIncrementConstraint) constraint;
+                break;
+            }
+        }
+        
+        return autoIncrementConstraint;
     }
 
     public boolean isPrimaryKey() {

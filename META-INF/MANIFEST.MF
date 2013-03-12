@@ -1,11 +1,11 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: Liquibase OSGi
-Bundle-SymbolicName: org.eclipseguru.liquibase
-Bundle-Version: 2.0.0.qualifier
-Bundle-Activator: org.eclipseguru.liquibase.internal.LiquibaseActivator
+Bundle-Name: Liquibase OSGi Port
+Bundle-SymbolicName: net.ageto.liquibase.osgi
+Bundle-Version: 2.0.5.qualifier
+Bundle-Activator: net.ageto.liquibase.internal.LiquibaseActivator
 Bundle-ClassPath: .
-Bundle-Vendor: EclipseGuru
+Bundle-Vendor: AGETO Labs
 Export-Package: liquibase,
  liquibase.change,
  liquibase.change.core,
@@ -28,7 +28,6 @@ Export-Package: liquibase,
  liquibase.lockservice,
  liquibase.logging,
  liquibase.logging.core,
- liquibase.logging.jvm,
  liquibase.parser,
  liquibase.parser.core.formattedsql,
  liquibase.parser.core.sql,
@@ -55,7 +54,7 @@ Export-Package: liquibase,
  liquibase.util.file,
  liquibase.util.ui,
  liquibase.util.xml,
- org.eclipseguru.liquibase.internal;x-internal:=true
+ net.ageto.liquibase.internal;x-internal:=true
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
 Import-Package: javax.servlet;version="2.5.0";resolution:=optional,
  javax.servlet.http;version="2.5.0";resolution:=optional,

@@ -49,14 +49,14 @@ public class ChangeSetExecutedPrecondition implements Precondition {
     }
     
     public void check(Database database, DatabaseChangeLog changeLog, ChangeSet changeSet) throws PreconditionFailedException, PreconditionErrorException {
-        ChangeSet interestedChangeSet = new ChangeSet(getId(), getAuthor(), false, false, getChangeLogFile(), getChangeLogFile(), null, null, false);
+        ChangeSet interestedChangeSet = new ChangeSet(getId(), getAuthor(), false, false, getChangeLogFile(), null, null, false);
         RanChangeSet ranChangeSet;
         try {
             ranChangeSet = database.getRanChangeSet(interestedChangeSet);
         } catch (Exception e) {
             throw new PreconditionErrorException(e, changeLog, this);
         }
-        if (ranChangeSet == null) {
+        if (ranChangeSet == null || ranChangeSet.getExecType() == null || !ranChangeSet.getExecType().ran) {
             throw new PreconditionFailedException("Change Set '"+interestedChangeSet.toString(false)+"' has not been run", changeLog, this);
         }
     }

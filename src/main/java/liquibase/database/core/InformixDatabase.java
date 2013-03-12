@@ -8,6 +8,7 @@ import liquibase.executor.ExecutorService;
 import liquibase.statement.core.GetViewDefinitionStatement;
 import liquibase.statement.core.RawSqlStatement;
 
+import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -112,7 +113,7 @@ public class InformixDatabase extends AbstractDatabase {
         	 */
 			ExecutorService.getInstance().getExecutor(this).execute(new RawSqlStatement("EXECUTE PROCEDURE IFX_ALLOW_NEWLINE('T');"));
 		} catch (Exception e) {
-			new UnexpectedLiquibaseException("Could not allow newline characters in quoted strings with IFX_ALLOW_NEWLINE");
+			throw new UnexpectedLiquibaseException("Could not allow newline characters in quoted strings with IFX_ALLOW_NEWLINE", e);
 		}
     }
 	
@@ -141,10 +142,12 @@ public class InformixDatabase extends AbstractDatabase {
 	}
 
 	public boolean supportsInitiallyDeferrableColumns() {
-		// TODO dont know if this correct
-		return true;
+		return false;
 	}
 
+	/*
+	 * Informix calls them Dbspaces
+	 */
 	public boolean supportsTablespaces() {
 		return true;
 	}
@@ -156,14 +159,14 @@ public class InformixDatabase extends AbstractDatabase {
 		// building the view definition from the multiple rows
 		StringBuilder sb = new StringBuilder();
 		for (Map rowMap : retList) {
-			String s = (String) rowMap.get("viewtext");
+			String s = (String) rowMap.get("VIEWTEXT");
 			sb.append(s);
 		}
 		return CREATE_VIEW_AS_PATTERN.matcher(sb.toString()).replaceFirst("");
 	}
 
 	@Override
-	public String getAutoIncrementClause() {
+	public String getAutoIncrementClause(BigInteger startWith, BigInteger incrementBy) {
 		return "";
 	}
 
@@ -188,7 +191,6 @@ public class InformixDatabase extends AbstractDatabase {
 	
 	@Override
 	public boolean supportsSchemas() {
-		return true;
+		return false;
 	}
-
 }

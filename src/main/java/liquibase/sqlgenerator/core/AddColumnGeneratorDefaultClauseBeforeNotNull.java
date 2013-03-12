@@ -1,18 +1,27 @@
 package liquibase.sqlgenerator.core;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import liquibase.database.Database;
-import liquibase.database.typeconversion.TypeConverterFactory;
-import liquibase.database.core.*;
+import liquibase.database.core.DB2Database;
+import liquibase.database.core.DerbyDatabase;
+import liquibase.database.core.FirebirdDatabase;
+import liquibase.database.core.H2Database;
+import liquibase.database.core.HsqlDatabase;
+import liquibase.database.core.InformixDatabase;
+import liquibase.database.core.OracleDatabase;
+import liquibase.database.core.SybaseASADatabase;
+import liquibase.database.core.SybaseDatabase;
 import liquibase.database.structure.Column;
 import liquibase.database.structure.Table;
+import liquibase.database.typeconversion.TypeConverterFactory;
 import liquibase.exception.ValidationErrors;
 import liquibase.sql.Sql;
 import liquibase.sql.UnparsedSql;
 import liquibase.sqlgenerator.SqlGeneratorChain;
+import liquibase.statement.AutoIncrementConstraint;
 import liquibase.statement.core.AddColumnStatement;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class AddColumnGeneratorDefaultClauseBeforeNotNull extends AddColumnGenerator {
     @Override
@@ -28,6 +37,8 @@ public class AddColumnGeneratorDefaultClauseBeforeNotNull extends AddColumnGener
                 || database instanceof DerbyDatabase
                 || database instanceof DB2Database
                 || database instanceof FirebirdDatabase
+                || database instanceof SybaseDatabase
+                || database instanceof SybaseASADatabase
                 || database instanceof InformixDatabase;
     }
 
@@ -53,11 +64,14 @@ public class AddColumnGeneratorDefaultClauseBeforeNotNull extends AddColumnGener
         }
 
         if (statement.isAutoIncrement()) {
-            alterTable += " " + database.getAutoIncrementClause();
+            AutoIncrementConstraint autoIncrementConstraint = statement.getAutoIncrementConstraint();
+            alterTable += " " + database.getAutoIncrementClause(autoIncrementConstraint.getStartWith(), autoIncrementConstraint.getIncrementBy());
         }
 
         if (!statement.isNullable()) {
             alterTable += " NOT NULL";
+        } else if (database instanceof SybaseDatabase || database instanceof SybaseASADatabase) {
+            alterTable += " NULL";
         }
 
         if (!primaryKeyBeforeNotNull(database)) {

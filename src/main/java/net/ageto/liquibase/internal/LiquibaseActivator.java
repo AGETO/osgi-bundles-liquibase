@@ -1,4 +1,4 @@
-package org.eclipseguru.liquibase.internal;
+package net.ageto.liquibase.internal;
 
 import liquibase.servicelocator.ServiceLocator;
 

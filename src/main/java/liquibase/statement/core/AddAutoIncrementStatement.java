@@ -1,19 +1,31 @@
 package liquibase.statement.core;
 
-import liquibase.statement.SqlStatement;
+import java.math.BigInteger;
 
-public class AddAutoIncrementStatement implements SqlStatement {
+import liquibase.statement.AbstractSqlStatement;
+
+public class AddAutoIncrementStatement extends AbstractSqlStatement {
 
     private String schemaName;
     private String tableName;
     private String columnName;
     private String columnDataType;
-
-    public AddAutoIncrementStatement(String schemaName, String tableName, String columnName, String columnDataType) {
+    private BigInteger startWith;
+    private BigInteger incrementBy;
+    
+    public AddAutoIncrementStatement(
+    		String schemaName,
+    		String tableName,
+    		String columnName,
+    		String columnDataType,
+    		BigInteger startWith,
+    		BigInteger incrementBy) {
         this.schemaName = schemaName;
         this.tableName = tableName;
         this.columnName = columnName;
         this.columnDataType = columnDataType;
+        this.startWith = startWith;
+        this.incrementBy = incrementBy;
     }
 
     public String getSchemaName() {
@@ -30,5 +42,13 @@ public class AddAutoIncrementStatement implements SqlStatement {
 
     public String getColumnDataType() {
         return columnDataType;
+    }
+    
+    public BigInteger getStartWith() {
+    	return startWith;
+    }
+    
+    public BigInteger getIncrementBy() {
+    	return incrementBy;
     }
 }
